@@ -2,7 +2,12 @@ import Foundation
 import UIKit
 
 struct RamsPDFDocument {
+    var brandName: String
     var title: String
+    var subtitle: String
+    var projectName: String
+    var referenceCode: String
+    var generatedAt: Date
     var sections: [RamsPDFSection]
 }
 
@@ -24,6 +29,7 @@ indirect enum RamsPDFBlockContent {
     case keyValueRows([(String, String)])
     case bulletList([String])
     case table(title: String?, headers: [String], rows: [[String]])
+    case signatureCard(name: String, role: String, signedAt: String, imageData: Data)
     case image(data: Data, caption: String?)
     case group(title: String?, children: [RamsPDFBlock])
     case spacer(height: CGFloat)
@@ -39,15 +45,15 @@ enum RamsPDFTextStyle {
     var font: UIFont {
         switch self {
         case .title:
-            return .boldSystemFont(ofSize: 20)
+            return .boldSystemFont(ofSize: 22)
         case .heading:
-            return .boldSystemFont(ofSize: 15)
+            return .boldSystemFont(ofSize: 16)
         case .subheading:
-            return .boldSystemFont(ofSize: 12)
+            return .boldSystemFont(ofSize: 12.5)
         case .body:
             return .systemFont(ofSize: 10.5)
         case .caption:
-            return .systemFont(ofSize: 9)
+            return .systemFont(ofSize: 8.8)
         }
     }
 }
@@ -57,6 +63,8 @@ final class RamsPDFPrintEngine {
     private let PAGE_WIDTH_PX: CGFloat = 595
     private let PAGE_HEIGHT_PX: CGFloat = 842
     private let PAGE_PADDING = UIEdgeInsets(top: 24, left: 28, bottom: 24, right: 28)
+    private let headerReservedHeight: CGFloat = 42
+    private let footerReservedHeight: CGFloat = 26
 
     private let minSplitHeight: CGFloat = 30
     private let blockSpacing: CGFloat = 8
@@ -64,10 +72,18 @@ final class RamsPDFPrintEngine {
     private let tableCellPadding: CGFloat = 5
     private let bulletIndent: CGFloat = 14
 
+    private let brandColor = UIColor(red: 20 / 255, green: 68 / 255, blue: 116 / 255, alpha: 1)
+    private let brandColorDark = UIColor(red: 13 / 255, green: 45 / 255, blue: 78 / 255, alpha: 1)
+    private let mutedTextColor = UIColor(white: 0.33, alpha: 1)
+    private let gridStrokeColor = UIColor(white: 0.78, alpha: 1)
+    private let sectionBackgroundColor = UIColor(red: 232 / 255, green: 240 / 255, blue: 249 / 255, alpha: 1)
+    private let zebraRowColor = UIColor(white: 0.97, alpha: 1)
+
     func export(document: RamsPDFDocument, fileNameStem: String) throws -> URL {
         let shell = createPageShell()
         let rootBlocks = prepareRootClone(from: document)
         let pages = paginateRoot(rootBlocks, shell: shell)
+        let totalPages = pages.count + 1 // Cover page + content pages
 
         let renderer = UIGraphicsPDFRenderer(bounds: shell.pageRect)
         let fileName = "RAMS-\(fileNameStem)-\(Int(Date().timeIntervalSince1970)).pdf"
@@ -75,15 +91,20 @@ final class RamsPDFPrintEngine {
 
         do {
             try renderer.writePDF(to: outputURL) { context in
-                for page in pages where !page.blocks.isEmpty {
+                context.beginPage()
+                drawCoverPage(document: document, shell: shell, context: context, pageNumber: 1, totalPages: totalPages)
+
+                for (index, page) in pages.enumerated() where !page.blocks.isEmpty {
+                    let pageNumber = index + 2
                     context.beginPage()
                     var cursorY = shell.contentRect.minY
-                    drawPageHeader(document.title, shell: shell, context: context)
-                    cursorY += 14
+                    drawPageHeader(document: document, shell: shell, context: context, pageNumber: pageNumber, totalPages: totalPages)
 
                     for block in page.blocks {
                         cursorY = draw(block: block, at: cursorY, shell: shell, context: context)
                     }
+
+                    drawPageFooter(document: document, shell: shell, context: context, pageNumber: pageNumber, totalPages: totalPages)
                 }
             }
             return outputURL
@@ -121,7 +142,7 @@ final class RamsPDFPrintEngine {
                     children: children.map(applyNoSplitHints)
                 )
             )
-        case .table, .heading:
+        case .table, .heading, .signatureCard:
             var updated = block
             // "Don't split inside" hint equivalent for key structural elements.
             updated.keepTogether = true
@@ -147,9 +168,9 @@ final class RamsPDFPrintEngine {
         let pageRect = CGRect(x: 0, y: 0, width: PAGE_WIDTH_PX, height: PAGE_HEIGHT_PX)
         let contentRect = CGRect(
             x: PAGE_PADDING.left,
-            y: PAGE_PADDING.top,
+            y: PAGE_PADDING.top + headerReservedHeight,
             width: PAGE_WIDTH_PX - PAGE_PADDING.left - PAGE_PADDING.right,
-            height: PAGE_HEIGHT_PX - PAGE_PADDING.top - PAGE_PADDING.bottom
+            height: PAGE_HEIGHT_PX - PAGE_PADDING.top - PAGE_PADDING.bottom - headerReservedHeight - footerReservedHeight
         )
         return PageShell(pageRect: pageRect, contentRect: contentRect)
     }
@@ -157,7 +178,7 @@ final class RamsPDFPrintEngine {
     private func paginateRoot(_ blocks: [RamsPDFBlock], shell: PageShell) -> [PageLayout] {
         var pending = blocks
         var pages: [PageLayout] = [PageLayout()]
-        let pageContentHeight = shell.contentRect.height - 14
+        let pageContentHeight = shell.contentRect.height
 
         while !pending.isEmpty {
             let block = pending.removeFirst()
@@ -288,7 +309,7 @@ final class RamsPDFPrintEngine {
                 availableHeight: availableHeight,
                 width: contentWidth
             )
-        case .heading, .spacer:
+        case .heading, .spacer, .signatureCard:
             return nil
         }
     }
@@ -304,12 +325,13 @@ final class RamsPDFPrintEngine {
         guard rows.count > 1 else { return nil }
 
         let titleHeight = title.map { measureText($0, style: .subheading, width: width) + innerGroupSpacing } ?? 0
-        let headerHeight = measureTableHeader(headers: headers, width: width)
+        let columnWidths = tableColumnWidths(headers: headers, totalWidth: width)
+        let headerHeight = measureTableHeader(headers: headers, columnWidths: columnWidths)
         var consumed = titleHeight + headerHeight
         var splitIndex = 0
 
         for (index, row) in rows.enumerated() {
-            let rowHeight = measureTableRow(cells: row, columns: headers.count, width: width)
+            let rowHeight = measureTableRow(cells: row, columnWidths: columnWidths)
             if consumed + rowHeight > availableHeight {
                 break
             }
@@ -556,7 +578,7 @@ final class RamsPDFPrintEngine {
         width: CGFloat
     ) -> (head: RamsPDFBlock, tail: RamsPDFBlock)? {
         guard pairs.count > 1 else { return nil }
-        var consumed: CGFloat = 0
+        var consumed: CGFloat = 8
         var splitIndex = 0
         for (index, pair) in pairs.enumerated() {
             let text = "\(pair.0): \(pair.1)"
@@ -644,6 +666,9 @@ final class RamsPDFPrintEngine {
         switch block.content {
         case .heading(let text, let level):
             let style: RamsPDFTextStyle = level == 1 ? .heading : .subheading
+            if level == 1 {
+                return measureText(text, style: style, width: width - 18) + 14 + blockSpacing
+            }
             return measureText(text, style: style, width: width) + blockSpacing
         case .paragraph(let text, let style):
             return measureText(text, style: style, width: width) + blockSpacing
@@ -652,7 +677,7 @@ final class RamsPDFPrintEngine {
                 let text = "\(pair.0): \(pair.1)"
                 return partial + measureText(text, style: .body, width: width) + 3
             }
-            return totalRows + blockSpacing
+            return totalRows + 8 + blockSpacing
         case .bulletList(let items):
             let rows = items.reduce(CGFloat.zero) { partial, item in
                 partial + measureText("• \(item)", style: .body, width: width - bulletIndent) + 2
@@ -660,11 +685,14 @@ final class RamsPDFPrintEngine {
             return rows + blockSpacing
         case .table(let title, let headers, let rows):
             let titleHeight = title.map { measureText($0, style: .subheading, width: width) + innerGroupSpacing } ?? 0
-            let headerHeight = measureTableHeader(headers: headers, width: width)
+            let columnWidths = tableColumnWidths(headers: headers, totalWidth: width)
+            let headerHeight = measureTableHeader(headers: headers, columnWidths: columnWidths)
             let rowHeights = rows.reduce(CGFloat.zero) { partial, row in
-                partial + measureTableRow(cells: row, columns: headers.count, width: width)
+                partial + measureTableRow(cells: row, columnWidths: columnWidths)
             }
             return titleHeight + headerHeight + rowHeights + blockSpacing
+        case .signatureCard:
+            return 102 + blockSpacing
         case .image(let data, let caption):
             guard let image = UIImage(data: data), image.size.width > 0 else { return 0 }
             let scale = width / image.size.width
@@ -682,21 +710,44 @@ final class RamsPDFPrintEngine {
         }
     }
 
-    private func measureTableHeader(headers: [String], width: CGFloat) -> CGFloat {
-        guard !headers.isEmpty else { return 0 }
-        let cellWidth = width / CGFloat(headers.count)
-        let headerTextHeight = headers.map {
-            measureText($0, style: .subheading, width: cellWidth - (tableCellPadding * 2))
+    private func measureTableHeader(headers: [String], columnWidths: [CGFloat]) -> CGFloat {
+        guard !headers.isEmpty, headers.count == columnWidths.count else { return 0 }
+        let headerTextHeight = zip(headers, columnWidths).map { header, width in
+            measureText(header, style: .subheading, width: width - (tableCellPadding * 2))
         }.max() ?? 0
         return headerTextHeight + (tableCellPadding * 2)
     }
 
-    private func measureTableRow(cells: [String], columns: Int, width: CGFloat) -> CGFloat {
-        guard columns > 0 else { return 0 }
-        let cellWidth = width / CGFloat(columns)
-        let paddedWidth = max(20, cellWidth - (tableCellPadding * 2))
-        let maxText = cells.map { measureText($0, style: .body, width: paddedWidth) }.max() ?? 0
+    private func measureTableRow(cells: [String], columnWidths: [CGFloat]) -> CGFloat {
+        guard !columnWidths.isEmpty else { return 0 }
+        var maxText: CGFloat = 0
+        for index in columnWidths.indices {
+            let value = index < cells.count ? cells[index] : ""
+            let paddedWidth = max(20, columnWidths[index] - (tableCellPadding * 2))
+            maxText = max(maxText, measureText(value, style: .body, width: paddedWidth))
+        }
         return maxText + (tableCellPadding * 2)
+    }
+
+    private func tableColumnWidths(headers: [String], totalWidth: CGFloat) -> [CGFloat] {
+        guard !headers.isEmpty else { return [] }
+        let lowered = headers.map { $0.lowercased() }
+
+        let fractions: [CGFloat]
+        if lowered == ["hazard", "risk to", "initial", "residual", "review"] {
+            fractions = [0.28, 0.32, 0.12, 0.12, 0.16]
+        } else if lowered == ["signer", "role", "signed at"] {
+            fractions = [0.3, 0.38, 0.32]
+        } else if lowered == ["name", "role", "phone"] {
+            fractions = [0.34, 0.38, 0.28]
+        } else {
+            let equal = 1 / CGFloat(headers.count)
+            fractions = Array(repeating: equal, count: headers.count)
+        }
+
+        let normalized = fractions.map { max(0, $0) }
+        let sum = max(0.0001, normalized.reduce(0, +))
+        return normalized.map { ($0 / sum) * totalWidth }
     }
 
     private func measureText(_ text: String, style: RamsPDFTextStyle, width: CGFloat) -> CGFloat {
@@ -747,13 +798,40 @@ final class RamsPDFPrintEngine {
         switch block.content {
         case .heading(let text, let level):
             let style: RamsPDFTextStyle = level == 1 ? .heading : .subheading
-            let nextY = drawText(
-                text,
-                style: style,
-                at: CGPoint(x: shell.contentRect.minX, y: y),
-                width: shell.contentRect.width
-            )
-            return nextY + blockSpacing
+            if level == 1 {
+                let textHeight = measureText(text, style: style, width: shell.contentRect.width - 18)
+                let bannerHeight = textHeight + 14
+                let bannerRect = CGRect(
+                    x: shell.contentRect.minX,
+                    y: y,
+                    width: shell.contentRect.width,
+                    height: bannerHeight
+                )
+                context.cgContext.setFillColor(sectionBackgroundColor.cgColor)
+                let path = UIBezierPath(roundedRect: bannerRect, cornerRadius: 6)
+                context.cgContext.addPath(path.cgPath)
+                context.cgContext.fillPath()
+
+                let stripeRect = CGRect(x: bannerRect.minX, y: bannerRect.minY, width: 5, height: bannerRect.height)
+                context.cgContext.setFillColor(brandColor.cgColor)
+                context.cgContext.fill(stripeRect)
+
+                let nextY = drawText(
+                    text,
+                    style: style,
+                    at: CGPoint(x: shell.contentRect.minX + 10, y: y + 7),
+                    width: shell.contentRect.width - 14
+                )
+                return max(nextY, bannerRect.maxY) + blockSpacing
+            } else {
+                let nextY = drawText(
+                    text,
+                    style: style,
+                    at: CGPoint(x: shell.contentRect.minX, y: y),
+                    width: shell.contentRect.width
+                )
+                return nextY + blockSpacing
+            }
 
         case .paragraph(let text, let style):
             let nextY = drawText(
@@ -766,17 +844,35 @@ final class RamsPDFPrintEngine {
 
         case .keyValueRows(let pairs):
             var cursor = y
+            let measuredBlock = measure(block: RamsPDFBlock(content: .keyValueRows(pairs)), width: shell.contentRect.width)
+            let cardHeight = max(0, measuredBlock - blockSpacing)
+            let cardRect = CGRect(x: shell.contentRect.minX, y: y, width: shell.contentRect.width, height: cardHeight)
+            let cardPath = UIBezierPath(roundedRect: cardRect, cornerRadius: 6)
+            context.cgContext.setFillColor(UIColor(white: 0.985, alpha: 1).cgColor)
+            context.cgContext.addPath(cardPath.cgPath)
+            context.cgContext.fillPath()
+            context.cgContext.setStrokeColor(gridStrokeColor.cgColor)
+            context.cgContext.addPath(cardPath.cgPath)
+            context.cgContext.strokePath()
+
+            cursor += 8
             for pair in pairs {
-                let labelAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 10.5)]
-                let valueAttributes: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 10.5)]
+                let labelAttributes: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.boldSystemFont(ofSize: 10.5),
+                    .foregroundColor: brandColorDark
+                ]
+                let valueAttributes: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 10.5),
+                    .foregroundColor: UIColor.black
+                ]
                 let label = "\(pair.0): "
                 let labelWidth = ceil((label as NSString).size(withAttributes: labelAttributes).width)
-                let point = CGPoint(x: shell.contentRect.minX, y: cursor)
+                let point = CGPoint(x: shell.contentRect.minX + 8, y: cursor)
                 (label as NSString).draw(at: point, withAttributes: labelAttributes)
                 let valueRect = CGRect(
-                    x: shell.contentRect.minX + labelWidth,
+                    x: shell.contentRect.minX + 8 + labelWidth,
                     y: cursor,
-                    width: shell.contentRect.width - labelWidth,
+                    width: shell.contentRect.width - labelWidth - 16,
                     height: .greatestFiniteMagnitude
                 )
                 let valueHeight = ceil((pair.1 as NSString).boundingRect(
@@ -793,7 +889,7 @@ final class RamsPDFPrintEngine {
                 )
                 cursor += valueHeight + 3
             }
-            return cursor + blockSpacing
+            return max(cursor, cardRect.maxY) + blockSpacing
 
         case .bulletList(let items):
             var cursor = y
@@ -830,6 +926,51 @@ final class RamsPDFPrintEngine {
                 context: context
             )
             return cursor + blockSpacing
+
+        case .signatureCard(let name, let role, let signedAt, let imageData):
+            let cardRect = CGRect(x: shell.contentRect.minX, y: y, width: shell.contentRect.width, height: 102)
+            let cardPath = UIBezierPath(roundedRect: cardRect, cornerRadius: 8)
+            context.cgContext.setFillColor(UIColor(white: 0.985, alpha: 1).cgColor)
+            context.cgContext.addPath(cardPath.cgPath)
+            context.cgContext.fillPath()
+            context.cgContext.setStrokeColor(gridStrokeColor.cgColor)
+            context.cgContext.addPath(cardPath.cgPath)
+            context.cgContext.strokePath()
+
+            let imageWidth: CGFloat = 190
+            let imageHeight: CGFloat = 62
+            let imageX = cardRect.maxX - imageWidth - 10
+            let imageY = cardRect.minY + 20
+            let imageRect = CGRect(x: imageX, y: imageY, width: imageWidth, height: imageHeight)
+            context.cgContext.setFillColor(UIColor.white.cgColor)
+            context.cgContext.fill(imageRect)
+            context.cgContext.setStrokeColor(gridStrokeColor.cgColor)
+            context.cgContext.stroke(imageRect)
+
+            if let signatureImage = UIImage(data: imageData), signatureImage.size.width > 0 {
+                signatureImage.draw(in: imageRect.insetBy(dx: 2, dy: 2))
+            }
+
+            let textWidth = max(90, shell.contentRect.width - imageWidth - 28)
+            var textCursor = cardRect.minY + 12
+            textCursor = drawText(name, style: .subheading, at: CGPoint(x: cardRect.minX + 10, y: textCursor), width: textWidth)
+            textCursor = drawText(role, style: .body, at: CGPoint(x: cardRect.minX + 10, y: textCursor + 2), width: textWidth)
+            _ = drawText("Signed: \(signedAt)", style: .caption, at: CGPoint(x: cardRect.minX + 10, y: textCursor + 3), width: textWidth)
+
+            let stampRect = CGRect(x: cardRect.minX + 10, y: cardRect.maxY - 19, width: 94, height: 14)
+            let stampPath = UIBezierPath(roundedRect: stampRect, cornerRadius: 2)
+            context.cgContext.setFillColor(brandColor.cgColor)
+            context.cgContext.addPath(stampPath.cgPath)
+            context.cgContext.fillPath()
+            _ = drawText(
+                "DIGITAL SIGNED",
+                style: .caption,
+                at: CGPoint(x: stampRect.minX + 5, y: stampRect.minY + 2),
+                width: stampRect.width - 6,
+                color: .white
+            )
+
+            return cardRect.maxY + blockSpacing
 
         case .image(let data, let caption):
             guard let image = UIImage(data: data), image.size.width > 0 else {
@@ -872,13 +1013,27 @@ final class RamsPDFPrintEngine {
     }
 
     @discardableResult
-    private func drawText(_ text: String, style: RamsPDFTextStyle, at point: CGPoint, width: CGFloat) -> CGFloat {
-        drawText(text, style: style, in: CGRect(x: point.x, y: point.y, width: width, height: .greatestFiniteMagnitude))
+    private func drawText(
+        _ text: String,
+        style: RamsPDFTextStyle,
+        at point: CGPoint,
+        width: CGFloat,
+        color: UIColor = .black
+    ) -> CGFloat {
+        drawText(
+            text,
+            style: style,
+            in: CGRect(x: point.x, y: point.y, width: width, height: .greatestFiniteMagnitude),
+            color: color
+        )
     }
 
     @discardableResult
-    private func drawText(_ text: String, style: RamsPDFTextStyle, in rect: CGRect) -> CGFloat {
-        let attributes: [NSAttributedString.Key: Any] = [.font: style.font]
+    private func drawText(_ text: String, style: RamsPDFTextStyle, in rect: CGRect, color: UIColor = .black) -> CGFloat {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: style.font,
+            .foregroundColor: color
+        ]
         let measured = NSString(string: text).boundingRect(
             with: CGSize(width: rect.width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
@@ -899,49 +1054,60 @@ final class RamsPDFPrintEngine {
     ) -> CGFloat {
         guard !headers.isEmpty else { return point.y }
         let columns = headers.count
-        let cellWidth = width / CGFloat(columns)
+        let columnWidths = tableColumnWidths(headers: headers, totalWidth: width)
         var cursorY = point.y
         let cg = context.cgContext
 
-        let headerHeight = measureTableHeader(headers: headers, width: width)
+        let headerHeight = measureTableHeader(headers: headers, columnWidths: columnWidths)
         let headerRect = CGRect(x: point.x, y: cursorY, width: width, height: headerHeight)
-        UIColor(white: 0.95, alpha: 1).setFill()
+        brandColor.setFill()
         cg.fill(headerRect)
 
+        var columnX = point.x
         for (columnIndex, header) in headers.enumerated() {
             let cellRect = CGRect(
-                x: point.x + (CGFloat(columnIndex) * cellWidth),
+                x: columnX,
                 y: cursorY,
-                width: cellWidth,
+                width: columnWidths[columnIndex],
                 height: headerHeight
             )
-            UIColor.darkGray.setStroke()
+            gridStrokeColor.setStroke()
             cg.stroke(cellRect)
             _ = drawText(
                 header,
                 style: .subheading,
-                in: cellRect.insetBy(dx: tableCellPadding, dy: tableCellPadding)
+                in: cellRect.insetBy(dx: tableCellPadding, dy: tableCellPadding),
+                color: .white
             )
+            columnX += columnWidths[columnIndex]
         }
         cursorY += headerHeight
 
-        for row in rows {
-            let rowHeight = measureTableRow(cells: row, columns: columns, width: width)
+        for (rowIndex, row) in rows.enumerated() {
+            let rowHeight = measureTableRow(cells: row, columnWidths: columnWidths)
+            if rowIndex.isMultiple(of: 2) {
+                zebraRowColor.setFill()
+                cg.fill(CGRect(x: point.x, y: cursorY, width: width, height: rowHeight))
+            }
+
+            var rowColumnX = point.x
             for columnIndex in 0..<columns {
                 let value = columnIndex < row.count ? row[columnIndex] : ""
                 let cellRect = CGRect(
-                    x: point.x + (CGFloat(columnIndex) * cellWidth),
+                    x: rowColumnX,
                     y: cursorY,
-                    width: cellWidth,
+                    width: columnWidths[columnIndex],
                     height: rowHeight
                 )
-                UIColor.darkGray.setStroke()
+                gridStrokeColor.setStroke()
                 cg.stroke(cellRect)
                 _ = drawText(
                     value,
                     style: .body,
-                    in: cellRect.insetBy(dx: tableCellPadding, dy: tableCellPadding)
+                    in: cellRect.insetBy(dx: tableCellPadding, dy: tableCellPadding),
+                    color: .black
                 )
+                rowColumnX += columnWidths[columnIndex]
             }
             cursorY += rowHeight
         }
@@ -949,21 +1115,171 @@ final class RamsPDFPrintEngine {
         return cursorY
     }
 
-    private func drawPageHeader(_ title: String, shell: PageShell, context: UIGraphicsPDFRendererContext) {
+    private func drawCoverPage(
+        document: RamsPDFDocument,
+        shell: PageShell,
+        context: UIGraphicsPDFRendererContext,
+        pageNumber: Int,
+        totalPages: Int
+    ) {
+        let cg = context.cgContext
+        let bannerHeight: CGFloat = 170
+        let bannerRect = CGRect(x: 0, y: 0, width: shell.pageRect.width, height: bannerHeight)
+        cg.setFillColor(brandColor.cgColor)
+        cg.fill(bannerRect)
+
         _ = drawText(
-            title,
+            document.brandName,
             style: .caption,
-            at: CGPoint(x: shell.contentRect.minX, y: shell.contentRect.minY - 14),
-            width: shell.contentRect.width
+            at: CGPoint(x: shell.contentRect.minX, y: 42),
+            width: shell.contentRect.width,
+            color: .white
         )
+        _ = drawText(
+            document.title,
+            style: .title,
+            at: CGPoint(x: shell.contentRect.minX, y: 68),
+            width: shell.contentRect.width,
+            color: .white
+        )
+        _ = drawText(
+            document.subtitle,
+            style: .subheading,
+            at: CGPoint(x: shell.contentRect.minX, y: 102),
+            width: shell.contentRect.width,
+            color: UIColor(white: 0.93, alpha: 1)
+        )
+
+        let infoStartY = bannerRect.maxY + 42
+        let infoRows = [
+            ("Project", document.projectName),
+            ("Reference", document.referenceCode),
+            ("Issued", DateFormatter.shortDateTime.string(from: document.generatedAt))
+        ]
+        var y = infoStartY
+        for (label, value) in infoRows {
+            _ = drawText(
+                "\(label):",
+                style: .subheading,
+                at: CGPoint(x: shell.contentRect.minX, y: y),
+                width: 120,
+                color: brandColorDark
+            )
+            y = drawText(
+                value,
+                style: .body,
+                at: CGPoint(x: shell.contentRect.minX + 124, y: y + 1),
+                width: shell.contentRect.width - 124
+            ) + 9
+        }
+
+        let declarationText = """
+        This document contains the project master information, RAMS methodology, hazard/risk controls, and sign-off evidence.
+        Distribute only to authorized personnel and ensure all revisions are approved before site use.
+        """
+        _ = drawText(
+            declarationText,
+            style: .body,
+            at: CGPoint(x: shell.contentRect.minX, y: y + 20),
+            width: shell.contentRect.width,
+            color: mutedTextColor
+        )
+
+        drawPageFooter(document: document, shell: shell, context: context, pageNumber: pageNumber, totalPages: totalPages)
+    }
+
+    private func drawPageHeader(
+        document: RamsPDFDocument,
+        shell: PageShell,
+        context: UIGraphicsPDFRendererContext,
+        pageNumber: Int,
+        totalPages: Int
+    ) {
+        let topRect = CGRect(
+            x: shell.contentRect.minX,
+            y: PAGE_PADDING.top,
+            width: shell.contentRect.width,
+            height: headerReservedHeight - 8
+        )
+        context.cgContext.setFillColor(UIColor(white: 0.98, alpha: 1).cgColor)
+        context.cgContext.fill(topRect)
+
+        _ = drawText(
+            document.brandName,
+            style: .caption,
+            at: CGPoint(x: topRect.minX + 8, y: topRect.minY + 6),
+            width: topRect.width * 0.45,
+            color: brandColorDark
+        )
+
+        _ = drawText(
+            document.referenceCode.ifBlank("RAMS"),
+            style: .caption,
+            at: CGPoint(x: topRect.minX + 8, y: topRect.minY + 18),
+            width: topRect.width * 0.45,
+            color: mutedTextColor
+        )
+
+        let pageLabel = "Page \(pageNumber) of \(totalPages)"
+        _ = drawText(
+            pageLabel,
+            style: .caption,
+            at: CGPoint(x: topRect.maxX - 130, y: topRect.minY + 6),
+            width: 122,
+            color: mutedTextColor
+        )
+
+        _ = drawText(
+            document.projectName.ifBlank("Project"),
+            style: .caption,
+            at: CGPoint(x: topRect.maxX - 220, y: topRect.minY + 18),
+            width: 212,
+            color: mutedTextColor
+        )
+
         let lineRect = CGRect(
             x: shell.contentRect.minX,
-            y: shell.contentRect.minY - 2,
+            y: shell.contentRect.minY - 8,
             width: shell.contentRect.width,
-            height: 0.8
+            height: 1
         )
-        context.cgContext.setFillColor(UIColor.lightGray.cgColor)
+        context.cgContext.setFillColor(gridStrokeColor.cgColor)
         context.cgContext.fill(lineRect)
+    }
+
+    private func drawPageFooter(
+        document: RamsPDFDocument,
+        shell: PageShell,
+        context: UIGraphicsPDFRendererContext,
+        pageNumber: Int,
+        totalPages: Int
+    ) {
+        let footerY = shell.contentRect.maxY + 7
+        let lineRect = CGRect(x: shell.contentRect.minX, y: footerY, width: shell.contentRect.width, height: 0.8)
+        context.cgContext.setFillColor(gridStrokeColor.cgColor)
+        context.cgContext.fill(lineRect)
+
+        _ = drawText(
+            "Generated \(DateFormatter.shortDateTime.string(from: document.generatedAt))",
+            style: .caption,
+            at: CGPoint(x: shell.contentRect.minX, y: footerY + 3),
+            width: 220,
+            color: mutedTextColor
+        )
+        _ = drawText(
+            document.title,
+            style: .caption,
+            at: CGPoint(x: shell.contentRect.midX - 100, y: footerY + 3),
+            width: 200,
+            color: mutedTextColor
+        )
+        _ = drawText(
+            "Page \(pageNumber)/\(totalPages)",
+            style: .caption,
+            at: CGPoint(x: shell.contentRect.maxX - 90, y: footerY + 3),
+            width: 90,
+            color: mutedTextColor
+        )
     }
 
     // MARK: - "Smart slicing" helpers for large image blocks
@@ -1051,7 +1367,6 @@ final class RamsPDFPrintEngine {
     private struct SampledImage {
         let data: Data
         let bytesPerRow: Int
-        let width: Int
         let height: Int
     }
 
@@ -1081,7 +1396,7 @@ final class RamsPDFPrintEngine {
         }
 
         guard rendered else { return nil }
-        return SampledImage(data: rawData, bytesPerRow: bytesPerRow, width: width, height: height)
+        return SampledImage(data: rawData, bytesPerRow: bytesPerRow, height: height)
     }
 
     private func hasMeaningfulContent(_ block: RamsPDFBlock) -> Bool {
@@ -1096,6 +1411,11 @@ final class RamsPDFPrintEngine {
             return items.contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         case .table(_, _, let rows):
             return !rows.isEmpty
+        case .signatureCard(let name, let role, _, let imageData):
+            let hasMeta = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                !role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let hasImage = UIImage(data: imageData)?.cgImage != nil
+            return hasMeta || hasImage
         case .image(let data, _):
             guard let image = UIImage(data: data)?.cgImage else { return false }
             return imageHasMeaningfulContent(image)
@@ -1171,8 +1491,17 @@ enum RamsPDFDocumentBuilder {
             )
         )
 
+        let generatedAt = Date()
+        let projectName = master.projectName.ifBlank("Project")
+        let reference = rams.referenceCode.ifBlank("RAMS")
+
         return RamsPDFDocument(
+            brandName: "Construction RAMS Builder",
             title: "RAMS Export: \(rams.title.ifBlank("Untitled RAMS"))",
+            subtitle: "\(projectName) | \(reference) | Overall risk \(rams.overallRiskReview.rawValue)",
+            projectName: projectName,
+            referenceCode: reference,
+            generatedAt: generatedAt,
             sections: sections
         )
     }
@@ -1450,6 +1779,12 @@ enum RamsPDFDocumentBuilder {
 
         var blocks: [RamsPDFBlock] = [
             RamsPDFBlock(
+                content: .paragraph(
+                    text: "Sign-off confirms RAMS briefing has been completed and controls are understood before work starts.",
+                    style: .body
+                )
+            ),
+            RamsPDFBlock(
                 keepTogether: true,
                 content: .table(
                     title: "Signature register",
@@ -1463,22 +1798,11 @@ enum RamsPDFDocumentBuilder {
             blocks.append(
                 RamsPDFBlock(
                     keepTogether: true,
-                    content: .group(
-                        title: "\(signature.signerName.ifBlank("-")) (\(signature.signerRole.ifBlank("-")))",
-                        children: [
-                            RamsPDFBlock(
-                                content: .paragraph(
-                                    text: "Signed: \(DateFormatter.shortDateTime.string(from: signature.signedAt))",
-                                    style: .caption
-                                )
-                            ),
-                            RamsPDFBlock(
-                                content: .image(
-                                    data: signature.signatureImageData,
-                                    caption: "Digital signature"
-                                )
-                            )
-                        ]
+                    content: .signatureCard(
+                        name: signature.signerName.ifBlank("-"),
+                        role: signature.signerRole.ifBlank("-"),
+                        signedAt: DateFormatter.shortDateTime.string(from: signature.signedAt),
+                        imageData: signature.signatureImageData
                     )
                 )
             )

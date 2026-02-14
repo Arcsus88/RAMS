@@ -104,6 +104,12 @@ The print engine uses a deterministic A4 pipeline inspired by DOM-prepagination 
 5. **Structured section export**
    - Contents, Master Document, RAMS Method, Risk Register, optional Lift Plan, Appendices, and Sign-off are rendered as sectioned blocks for predictable page starts and cleaner print output.
 
+6. **Print-style polish layer**
+   - Branded cover page with project/reference metadata.
+   - Repeating page header/footer with page numbers and issue timestamp.
+   - Section banner styling, weighted table columns, zebra rows, and boxed key-value cards.
+   - Dedicated digital signature cards for cleaner sign-off pages.
+
 ---
 
 ## Future Supabase integration points
