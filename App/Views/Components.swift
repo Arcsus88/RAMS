@@ -2,6 +2,13 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+extension Color {
+    static let proSlate900 = Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255)
+    static let proSlate800 = Color(red: 30 / 255, green: 41 / 255, blue: 59 / 255)
+    static let proSlate100 = Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255)
+    static let proYellow = Color(red: 250 / 255, green: 204 / 255, blue: 21 / 255)
+}
+
 struct RiskReviewBadge: View {
     let review: RiskReview
 

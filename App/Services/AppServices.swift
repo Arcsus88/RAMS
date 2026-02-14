@@ -135,143 +135,21 @@ enum PDFExportError: LocalizedError {
 }
 
 final class PDFExportService {
+    private let printEngine = RamsPDFPrintEngine()
+
     func exportPDF(
         master: MasterDocument,
         rams: RamsDocument,
         liftPlan: LiftPlan?,
         signatures: [SignatureRecord]
     ) throws -> URL {
-        let pageRect = CGRect(x: 0, y: 0, width: 595, height: 842) // A4 at 72 DPI
-        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
-
-        let filename = "RAMS-\(rams.title.sanitizedPathComponent)-\(Int(Date().timeIntervalSince1970)).pdf"
-        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-
-        do {
-            try renderer.writePDF(to: outputURL) { context in
-                context.beginPage()
-                var cursorY: CGFloat = 24
-
-                cursorY = drawText("RAMS Builder Export", at: cursorY, font: .boldSystemFont(ofSize: 22))
-                cursorY = drawText("Project: \(master.projectName)", at: cursorY, font: .boldSystemFont(ofSize: 16))
-                cursorY = drawText("RAMS: \(rams.title)", at: cursorY)
-                cursorY = drawText("Reference: \(rams.referenceCode)", at: cursorY)
-                cursorY = drawText("Generated: \(DateFormatter.shortDateTime.string(from: Date()))", at: cursorY)
-                cursorY += 8
-
-                cursorY = drawHeading("Master Document", at: cursorY)
-                cursorY = drawText("Site address: \(master.siteAddress)", at: cursorY)
-                cursorY = drawText("Principal contractor: \(master.principalContractor)", at: cursorY)
-                cursorY = drawText("Emergency contact: \(master.emergencyContactName) - \(master.emergencyContactPhone)", at: cursorY)
-                cursorY = drawText("Nearest hospital: \(master.nearestHospitalName), \(master.nearestHospitalAddress)", at: cursorY)
-                cursorY = drawText("Directions: \(master.hospitalDirections)", at: cursorY)
-                cursorY += 8
-
-                cursorY = drawHeading("Method Statement", at: cursorY)
-                for step in rams.methodStatements {
-                    ensurePage(context: context, cursorY: &cursorY, requiredSpace: 60, pageHeight: pageRect.height)
-                    cursorY = drawText("\(step.sequence). \(step.title)", at: cursorY, font: .boldSystemFont(ofSize: 12))
-                    cursorY = drawText(step.details, at: cursorY)
-                }
-                cursorY += 8
-
-                ensurePage(context: context, cursorY: &cursorY, requiredSpace: 120, pageHeight: pageRect.height)
-                cursorY = drawHeading("Risk Assessments", at: cursorY)
-                for assessment in rams.riskAssessments {
-                    ensurePage(context: context, cursorY: &cursorY, requiredSpace: 90, pageHeight: pageRect.height)
-                    cursorY = drawText("Hazard: \(assessment.hazardTitle)", at: cursorY, font: .boldSystemFont(ofSize: 12))
-                    cursorY = drawText("Risk to: \(assessment.riskTo)", at: cursorY)
-                    cursorY = drawText(
-                        "Initial score: \(assessment.initialScore) | Residual score: \(assessment.residualScore) | Review: \(assessment.overallReview.rawValue) \(assessment.overallReview.title)",
-                        at: cursorY
-                    )
-                    let controls = assessment.controlMeasures.joined(separator: "; ")
-                    cursorY = drawText("Controls: \(controls)", at: cursorY)
-                    cursorY += 2
-                }
-
-                cursorY += 8
-                ensurePage(context: context, cursorY: &cursorY, requiredSpace: 120, pageHeight: pageRect.height)
-                cursorY = drawHeading("Overall Risk Review: \(rams.overallRiskReview.rawValue) \(rams.overallRiskReview.title)", at: cursorY)
-
-                if let liftPlan {
-                    cursorY += 8
-                    ensurePage(context: context, cursorY: &cursorY, requiredSpace: 180, pageHeight: pageRect.height)
-                    let loadWeight = String(format: "%.1f", liftPlan.loadWeightKg)
-                    let radius = String(format: "%.1f", liftPlan.liftRadiusMeters)
-                    let boom = String(format: "%.1f", liftPlan.boomLengthMeters)
-                    cursorY = drawHeading("Lift Plan (\(liftPlan.category.rawValue))", at: cursorY)
-                    cursorY = drawText("Title: \(liftPlan.title)", at: cursorY)
-                    cursorY = drawText("Equipment: \(liftPlan.craneOrPlant)", at: cursorY)
-                    cursorY = drawText("Load: \(liftPlan.loadDescription) - \(loadWeight) kg", at: cursorY)
-                    cursorY = drawText("Radius: \(radius) m | Boom: \(boom) m", at: cursorY)
-                    cursorY = drawText("Setup: \(liftPlan.setupLocation)", at: cursorY)
-                    cursorY = drawText("Landing: \(liftPlan.landingLocation)", at: cursorY)
-                    cursorY = drawText("Exclusion zone: \(liftPlan.exclusionZoneDetails)", at: cursorY)
-                    cursorY = drawText("Emergency rescue: \(liftPlan.emergencyRescuePlan)", at: cursorY)
-                    cursorY = drawText("Communication: \(liftPlan.communicationMethod)", at: cursorY)
-                }
-
-                cursorY += 8
-                ensurePage(context: context, cursorY: &cursorY, requiredSpace: 200, pageHeight: pageRect.height)
-                cursorY = drawHeading("Digital Signatures", at: cursorY)
-                if signatures.isEmpty {
-                    _ = drawText("No signatures captured.", at: cursorY)
-                } else {
-                    for signature in signatures {
-                        ensurePage(context: context, cursorY: &cursorY, requiredSpace: 110, pageHeight: pageRect.height)
-                        cursorY = drawText("\(signature.signerName) (\(signature.signerRole))", at: cursorY, font: .boldSystemFont(ofSize: 12))
-                        cursorY = drawText("Signed: \(DateFormatter.shortDateTime.string(from: signature.signedAt))", at: cursorY)
-                        if let image = UIImage(data: signature.signatureImageData) {
-                            let signatureRect = CGRect(x: 28, y: cursorY, width: 180, height: 60)
-                            image.draw(in: signatureRect)
-                            cursorY += 68
-                        } else {
-                            cursorY = drawText("Signature image unavailable", at: cursorY)
-                        }
-                    }
-                }
-            }
-        } catch {
-            throw PDFExportError.exportFailed
-        }
-
-        return outputURL
-    }
-
-    @discardableResult
-    private func drawHeading(_ text: String, at y: CGFloat) -> CGFloat {
-        drawText(text, at: y, font: .boldSystemFont(ofSize: 14))
-    }
-
-    @discardableResult
-    private func drawText(_ text: String, at y: CGFloat, font: UIFont = .systemFont(ofSize: 11)) -> CGFloat {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font
-        ]
-        let width: CGFloat = 540
-        let origin = CGPoint(x: 28, y: y)
-        let boundingRect = NSString(string: text).boundingRect(
-            with: CGSize(width: width, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attributes,
-            context: nil
+        let document = RamsPDFDocumentBuilder.build(
+            master: master,
+            rams: rams,
+            liftPlan: liftPlan,
+            signatures: signatures
         )
-        let drawingRect = CGRect(origin: origin, size: CGSize(width: width, height: ceil(boundingRect.height)))
-        NSString(string: text).draw(with: drawingRect, options: [.usesLineFragmentOrigin], attributes: attributes, context: nil)
-        return y + ceil(boundingRect.height) + 6
-    }
-
-    private func ensurePage(
-        context: UIGraphicsPDFRendererContext,
-        cursorY: inout CGFloat,
-        requiredSpace: CGFloat,
-        pageHeight: CGFloat
-    ) {
-        if cursorY + requiredSpace > pageHeight - 24 {
-            context.beginPage()
-            cursorY = 24
-        }
+        return try printEngine.export(document: document, fileNameStem: rams.title.sanitizedPathComponent)
     }
 }
 

@@ -23,24 +23,52 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
-                Spacer(minLength: 16)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Construction RAMS Builder")
-                        .font(.largeTitle.weight(.bold))
-                    Text("Create Master Documents, RAMS and Lift Plans with reusable libraries.")
+                Spacer(minLength: 12)
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.proYellow)
+                            .frame(width: 42, height: 42)
+                            .overlay {
+                                Image(systemName: "shield.fill")
+                                    .foregroundStyle(Color.proSlate900)
+                                    .font(.headline.weight(.bold))
+                            }
+                        Text("ProRAMS Builder")
+                            .font(.title2.weight(.heavy))
+                            .foregroundStyle(.white)
+                    }
+                    Text("Create professional RAMS documents, lift plans, and sign-off packs.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.85))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
+                .background(Color.proSlate900)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
 
                 VStack(spacing: 12) {
                     TextField("Email", text: $email)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
                         .autocorrectionDisabled()
-                        .textFieldStyle(.roundedBorder)
+                        .padding(12)
+                        .background(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.proSlate100, lineWidth: 1)
+                        )
 
                     SecureField("Password", text: $password)
-                        .textFieldStyle(.roundedBorder)
+                        .padding(12)
+                        .background(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.proSlate100, lineWidth: 1)
+                        )
 
                     if let errorMessage = sessionViewModel.errorMessage {
                         Text(errorMessage)
@@ -57,17 +85,27 @@ struct LoginView: View {
                         if sessionViewModel.isLoading {
                             ProgressView()
                                 .frame(maxWidth: .infinity)
+                                .tint(Color.proSlate900)
                         } else {
                             Text("Login")
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.plain)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(Color.proSlate900)
+                    .padding(.vertical, 12)
+                    .background(Color.proYellow)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .disabled(sessionViewModel.isLoading)
                 }
                 .padding()
-                .background(Color.secondary.opacity(0.06))
+                .background(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.proSlate100, lineWidth: 1)
+                )
 
                 Spacer()
 
@@ -76,6 +114,7 @@ struct LoginView: View {
                     .foregroundStyle(.secondary)
             }
             .padding()
+            .background(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
             .navigationBarHidden(true)
         }
     }
@@ -103,6 +142,7 @@ struct DashboardView: View {
                     Label("Account", systemImage: "person.circle")
                 }
         }
+        .tint(.proYellow)
         .task {
             libraryViewModel.loadIfNeeded()
         }
