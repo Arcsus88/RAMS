@@ -8,12 +8,45 @@ struct WizardFlowView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("RAMS Builder Wizard")
-                        .font(.title2.weight(.bold))
-                    ProgressView(value: viewModel.progressValue)
+                VStack(spacing: 12) {
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 9)
+                            .fill(Color.proYellow)
+                            .frame(width: 34, height: 34)
+                            .overlay {
+                                Image(systemName: "shield.fill")
+                                    .foregroundStyle(Color.proSlate900)
+                                    .font(.subheadline.weight(.bold))
+                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("ProRAMS Builder")
+                                .font(.headline.weight(.heavy))
+                            Text("Construction RAMS Workflow")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
+                        Spacer()
+                        if viewModel.currentStep == .review {
+                            Label("Finish & Preview", systemImage: "doc.richtext")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Color.proSlate900)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Color.proYellow)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .padding(14)
+                    .background(Color.proSlate900)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                    ProStepTrackerView(
+                        steps: viewModel.orderedSteps,
+                        currentStep: viewModel.currentStep
+                    )
+
                     Text("Step \(viewModel.stepIndex + 1) of \(viewModel.orderedSteps.count): \(viewModel.currentStep.rawValue)")
-                        .font(.footnote)
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
                 .padding([.horizontal, .top])
@@ -58,7 +91,13 @@ struct WizardFlowView: View {
                         Button("Back") {
                             viewModel.goBack()
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.plain)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color.secondary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                         .disabled(!viewModel.canGoBack)
 
                         Spacer()
@@ -67,12 +106,19 @@ struct WizardFlowView: View {
                             Button("Continue") {
                                 viewModel.goNext()
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.plain)
+                            .font(.headline.weight(.heavy))
+                            .foregroundStyle(Color.proSlate900)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.proYellow)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                     }
                 }
                 .padding()
             }
+            .background(Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255))
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingHazardPicker) {
                 HazardLibraryPickerSheet(
@@ -528,6 +574,52 @@ private struct HazardLibraryPickerSheet: View {
                 }
             }
         }
+    }
+}
+
+private struct ProStepTrackerView: View {
+    let steps: [WizardStep]
+    let currentStep: WizardStep
+
+    private var currentIndex: Int {
+        steps.firstIndex(of: currentStep) ?? 0
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, _ in
+                HStack(spacing: 0) {
+                    ZStack {
+                        Circle()
+                            .fill(index <= currentIndex ? Color.proYellow : Color.proSlate100)
+                            .frame(width: 30, height: 30)
+                        if index < currentIndex {
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Color.proSlate900)
+                        } else {
+                            Text("\(index + 1)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(index <= currentIndex ? Color.proSlate900 : .secondary)
+                        }
+                    }
+
+                    if index < steps.count - 1 {
+                        Rectangle()
+                            .fill(index < currentIndex ? Color.proYellow : Color.proSlate100)
+                            .frame(width: 34, height: 4)
+                            .padding(.horizontal, 8)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.proSlate100, lineWidth: 1)
+        )
     }
 }
 

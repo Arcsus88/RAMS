@@ -1175,6 +1175,19 @@ final class RamsPDFPrintEngine {
             color: UIColor(white: 0.93, alpha: 1)
         )
 
+        let statusRect = CGRect(x: shell.contentRect.maxX - 150, y: bannerRect.maxY - 34, width: 150, height: 20)
+        let statusPath = UIBezierPath(roundedRect: statusRect, cornerRadius: 4)
+        cg.setFillColor(activeTheme.tertiaryColor.withAlphaComponent(0.95).cgColor)
+        cg.addPath(statusPath.cgPath)
+        cg.fillPath()
+        _ = drawText(
+            activeTheme.documentStatusText,
+            style: .caption,
+            at: CGPoint(x: statusRect.minX + 8, y: statusRect.minY + 4),
+            width: statusRect.width - 12,
+            color: brandColorDark
+        )
+
         let infoStartY = bannerRect.maxY + 26
         let docControlTitleRect = CGRect(x: shell.contentRect.minX, y: infoStartY, width: shell.contentRect.width, height: 24)
         cg.setFillColor(activeTheme.sectionBackgroundColor.cgColor)
@@ -1193,8 +1206,8 @@ final class RamsPDFPrintEngine {
         let cardY = docControlTitleRect.maxY + 8
         let leftColumnWidth = shell.contentRect.width * 0.52
         let rightColumnWidth = shell.contentRect.width - leftColumnWidth - 10
-        let leftRect = CGRect(x: shell.contentRect.minX, y: cardY, width: leftColumnWidth, height: 126)
-        let rightRect = CGRect(x: leftRect.maxX + 10, y: cardY, width: rightColumnWidth, height: 126)
+        let leftRect = CGRect(x: shell.contentRect.minX, y: cardY, width: leftColumnWidth, height: 142)
+        let rightRect = CGRect(x: leftRect.maxX + 10, y: cardY, width: rightColumnWidth, height: 142)
         drawInfoCard(in: leftRect, cg: cg)
         drawInfoCard(in: rightRect, cg: cg)
 
@@ -1208,7 +1221,8 @@ final class RamsPDFPrintEngine {
             ("Revision", document.revisionCode.ifBlank("Rev A")),
             ("Prepared by", document.preparedBy.ifBlank("-")),
             ("Approved by", document.approvedBy.ifBlank("-")),
-            ("Issued", DateFormatter.shortDateTime.string(from: document.generatedAt))
+            ("Issued", DateFormatter.shortDateTime.string(from: document.generatedAt)),
+            ("Status", activeTheme.documentStatusText)
         ]
         drawControlRows(leftRows, in: leftRect, cg: cg)
         drawControlRows(rightRows, in: rightRect, cg: cg)

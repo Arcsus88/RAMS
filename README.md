@@ -119,11 +119,13 @@ The print engine uses a deterministic A4 pipeline inspired by DOM-prepagination 
 Brand profile values are centralized in:
 
 - `App/Services/PDFBrandTheme.swift`
+- `App/Views/Components.swift` color palette (`proSlate*`, `proYellow`) for UI styling
 
 You can customize:
 
 - company name and tagline
 - legal footer text
+- document status label (e.g. `LIVE / APPROVED`)
 - core brand colors (primary/secondary/section/grid)
 - logo image by adding an asset named `RAMSLogo` in Xcode (optional fallback monogram is automatic)
 
