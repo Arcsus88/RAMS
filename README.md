@@ -52,6 +52,25 @@ This repo uses **XcodeGen** to keep the scaffold simple in source control.
 
 ---
 
+## If the app will not build
+
+This repository does **not** commit a `.xcodeproj`; it is generated from `project.yml`.
+
+1. Install XcodeGen (2.38.0+):
+   ```bash
+   brew install xcodegen
+   ```
+2. Generate project:
+   ```bash
+   ./scripts/bootstrap_ios_project.sh
+   ```
+   (or run `xcodegen generate`)
+3. Open `RAMSBuilder.xcodeproj`
+4. In Xcode, select scheme `RAMSBuilder` and an iOS 17+ simulator.
+5. If needed: **Product > Clean Build Folder**, then build again.
+
+---
+
 ## Architecture summary
 
 - `App/Models/DomainModels.swift`
