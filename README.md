@@ -52,6 +52,9 @@ This repo uses **XcodeGen** to keep the scaffold simple in source control.
 
 - `App/Models/DomainModels.swift`
   - Master Document, RAMS, Hazard templates, Risk assessments, Lift plans, Signatures.
+- `App/Models/DocumentAndRAMSSchema.swift`
+  - Contract-style schema models for Master Document, Master Cover Config, Master Template, RAMS, and Hazard.
+  - Includes explicit field constraint validation (required fields, min/max lengths, array limits, URL checks, and bounded integers).
 - `App/Services/AppServices.swift`
   - `MockAuthService`
   - `LibraryStore` (JSON storage in Application Support)
@@ -61,6 +64,38 @@ This repo uses **XcodeGen** to keep the scaffold simple in source control.
   - Session, library, and wizard orchestration logic.
 - `App/Views/*`
   - Login, dashboard tabs, wizard steps, and reusable UI components.
+
+---
+
+## Document and RAMS schema contract
+
+The repository now includes a dedicated schema layer in:
+
+- `App/Models/DocumentAndRAMSSchema.swift`
+
+This is intentionally separate from the UI-oriented domain models used by the wizard so that API contract validation can evolve without breaking scaffolding UX.
+
+Implemented schema coverage:
+
+- `MasterDocument`
+  - Create payload: `projectId` required.
+  - Create/update optional fields validated: `title` (1...200), `documentReference` (1...120).
+  - Update status enum: `Draft | Issued | Closed | Archived`.
+- `MasterCoverConfig`
+  - Full field set from the contract including appendix metadata, user/recipient arrays, communication methods, PPE/permit/emergency fields, and long-form notes.
+  - Enforces declared max lengths, list sizes, and appendix URL/size constraints.
+- `MasterTemplate`
+  - Create payload requires `title` and `coverConfig`, supports partial cover config object.
+  - Section model validates `sectionTitle`, optional `sectionReference`, optional `displayOrder >= 0`, optional notes, and optional lifting plan object payload.
+  - Update status enum: `Active | Archived`.
+- `RAMS`
+  - Required project details object and required arrays for PPE/equipment/tools/materials/hazards.
+  - Method statement field limits, optional category, and optional tags (`max 25`, each `max 50`).
+- `Hazard`
+  - Required activity/hazard/persons-at-risk/controls fields.
+  - Likelihood and severity bounds enforced as `1...5`.
+
+Validation can be called directly with `try payload.validate()` on each schema payload/entity type.
 
 ---
 
