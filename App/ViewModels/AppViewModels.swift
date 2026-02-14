@@ -263,7 +263,7 @@ final class WizardViewModel: ObservableObject {
                 liftPlan: includeLiftPlan ? liftPlan : nil,
                 signatures: ramsDocument.signatureTable
             )
-            statusMessage = "PDF exported to temporary storage."
+            statusMessage = "PDF exported with paginated A4 layout."
         } catch {
             errorMessage = error.localizedDescription
         }
