@@ -2,11 +2,17 @@ import Foundation
 import UIKit
 
 struct RamsPDFDocument {
+    var theme: RamsPDFBrandTheme
     var brandName: String
     var title: String
     var subtitle: String
     var projectName: String
+    var siteAddress: String
+    var clientName: String
     var referenceCode: String
+    var revisionCode: String
+    var preparedBy: String
+    var approvedBy: String
     var generatedAt: Date
     var sections: [RamsPDFSection]
 }
@@ -72,14 +78,17 @@ final class RamsPDFPrintEngine {
     private let tableCellPadding: CGFloat = 5
     private let bulletIndent: CGFloat = 14
 
-    private let brandColor = UIColor(red: 20 / 255, green: 68 / 255, blue: 116 / 255, alpha: 1)
-    private let brandColorDark = UIColor(red: 13 / 255, green: 45 / 255, blue: 78 / 255, alpha: 1)
+    private var activeTheme: RamsPDFBrandTheme = .constructionDefault
     private let mutedTextColor = UIColor(white: 0.33, alpha: 1)
-    private let gridStrokeColor = UIColor(white: 0.78, alpha: 1)
-    private let sectionBackgroundColor = UIColor(red: 232 / 255, green: 240 / 255, blue: 249 / 255, alpha: 1)
     private let zebraRowColor = UIColor(white: 0.97, alpha: 1)
 
+    private var brandColor: UIColor { activeTheme.primaryColor }
+    private var brandColorDark: UIColor { activeTheme.secondaryColor }
+    private var gridStrokeColor: UIColor { activeTheme.tableGridColor }
+    private var sectionBackgroundColor: UIColor { activeTheme.sectionBackgroundColor }
+
     func export(document: RamsPDFDocument, fileNameStem: String) throws -> URL {
+        activeTheme = document.theme
         let shell = createPageShell()
         let rootBlocks = prepareRootClone(from: document)
         let pages = paginateRoot(rootBlocks, shell: shell)
@@ -1123,67 +1132,103 @@ final class RamsPDFPrintEngine {
         totalPages: Int
     ) {
         let cg = context.cgContext
-        let bannerHeight: CGFloat = 170
+        let bannerHeight: CGFloat = 210
         let bannerRect = CGRect(x: 0, y: 0, width: shell.pageRect.width, height: bannerHeight)
-        cg.setFillColor(brandColor.cgColor)
-        cg.fill(bannerRect)
-
-        _ = drawText(
-            document.brandName,
-            style: .caption,
-            at: CGPoint(x: shell.contentRect.minX, y: 42),
-            width: shell.contentRect.width,
-            color: .white
+        drawVerticalGradient(
+            from: brandColor,
+            to: activeTheme.tertiaryColor.blended(withFraction: 0.22, of: brandColorDark),
+            in: bannerRect,
+            cg: cg
         )
+
+        let logoRect = CGRect(x: shell.contentRect.minX, y: 34, width: 112, height: 64)
+        drawLogo(
+            imageData: activeTheme.logoImageData,
+            in: logoRect,
+            fallbackText: document.brandName,
+            cg: cg,
+            darkBackground: true
+        )
+
         _ = drawText(
             document.title,
             style: .title,
-            at: CGPoint(x: shell.contentRect.minX, y: 68),
-            width: shell.contentRect.width,
+            at: CGPoint(x: logoRect.maxX + 14, y: 52),
+            width: shell.contentRect.width - logoRect.width - 14,
             color: .white
         )
         _ = drawText(
             document.subtitle,
             style: .subheading,
-            at: CGPoint(x: shell.contentRect.minX, y: 102),
+            at: CGPoint(x: logoRect.maxX + 14, y: 88),
+            width: shell.contentRect.width - logoRect.width - 14,
+            color: UIColor(white: 0.93, alpha: 1)
+        )
+
+        _ = drawText(
+            activeTheme.tagline,
+            style: .caption,
+            at: CGPoint(x: shell.contentRect.minX, y: bannerRect.maxY - 22),
             width: shell.contentRect.width,
             color: UIColor(white: 0.93, alpha: 1)
         )
 
-        let infoStartY = bannerRect.maxY + 42
-        let infoRows = [
+        let infoStartY = bannerRect.maxY + 26
+        let docControlTitleRect = CGRect(x: shell.contentRect.minX, y: infoStartY, width: shell.contentRect.width, height: 24)
+        cg.setFillColor(activeTheme.sectionBackgroundColor.cgColor)
+        cg.fill(docControlTitleRect)
+        let sideStripe = CGRect(x: docControlTitleRect.minX, y: docControlTitleRect.minY, width: 5, height: docControlTitleRect.height)
+        cg.setFillColor(brandColor.cgColor)
+        cg.fill(sideStripe)
+        _ = drawText(
+            "Document Control",
+            style: .subheading,
+            at: CGPoint(x: docControlTitleRect.minX + 10, y: docControlTitleRect.minY + 5),
+            width: docControlTitleRect.width - 12,
+            color: brandColorDark
+        )
+
+        let cardY = docControlTitleRect.maxY + 8
+        let leftColumnWidth = shell.contentRect.width * 0.52
+        let rightColumnWidth = shell.contentRect.width - leftColumnWidth - 10
+        let leftRect = CGRect(x: shell.contentRect.minX, y: cardY, width: leftColumnWidth, height: 126)
+        let rightRect = CGRect(x: leftRect.maxX + 10, y: cardY, width: rightColumnWidth, height: 126)
+        drawInfoCard(in: leftRect, cg: cg)
+        drawInfoCard(in: rightRect, cg: cg)
+
+        let leftRows = [
             ("Project", document.projectName),
-            ("Reference", document.referenceCode),
+            ("Site", document.siteAddress.ifBlank("-")),
+            ("Client", document.clientName.ifBlank("-")),
+            ("Reference", document.referenceCode.ifBlank("-"))
+        ]
+        let rightRows = [
+            ("Revision", document.revisionCode.ifBlank("Rev A")),
+            ("Prepared by", document.preparedBy.ifBlank("-")),
+            ("Approved by", document.approvedBy.ifBlank("-")),
             ("Issued", DateFormatter.shortDateTime.string(from: document.generatedAt))
         ]
-        var y = infoStartY
-        for (label, value) in infoRows {
-            _ = drawText(
-                "\(label):",
-                style: .subheading,
-                at: CGPoint(x: shell.contentRect.minX, y: y),
-                width: 120,
-                color: brandColorDark
-            )
-            y = drawText(
-                value,
-                style: .body,
-                at: CGPoint(x: shell.contentRect.minX + 124, y: y + 1),
-                width: shell.contentRect.width - 124
-            ) + 9
-        }
+        drawControlRows(leftRows, in: leftRect, cg: cg)
+        drawControlRows(rightRows, in: rightRect, cg: cg)
 
-        let declarationText = """
-        This document contains the project master information, RAMS methodology, hazard/risk controls, and sign-off evidence.
-        Distribute only to authorized personnel and ensure all revisions are approved before site use.
-        """
-        _ = drawText(
-            declarationText,
-            style: .body,
-            at: CGPoint(x: shell.contentRect.minX, y: y + 20),
-            width: shell.contentRect.width,
-            color: mutedTextColor
-        )
+        let declarationY = max(leftRect.maxY, rightRect.maxY) + 18
+        let infoRows = [
+            "This RAMS package is issued for controlled construction use only.",
+            "All task supervisors must verify current revision and complete sign-off before commencement.",
+            activeTheme.legalFooterText
+        ]
+        let declarationRect = CGRect(x: shell.contentRect.minX, y: declarationY, width: shell.contentRect.width, height: 96)
+        drawInfoCard(in: declarationRect, cg: cg)
+        var declarationCursor = declarationRect.minY + 10
+        for line in infoRows {
+            declarationCursor = drawText(
+                line,
+                style: .body,
+                at: CGPoint(x: declarationRect.minX + 9, y: declarationCursor),
+                width: declarationRect.width - 18,
+                color: mutedTextColor
+            ) + 4
+        }
 
         drawPageFooter(document: document, shell: shell, context: context, pageNumber: pageNumber, totalPages: totalPages)
     }
@@ -1204,10 +1249,19 @@ final class RamsPDFPrintEngine {
         context.cgContext.setFillColor(UIColor(white: 0.98, alpha: 1).cgColor)
         context.cgContext.fill(topRect)
 
+        let logoRect = CGRect(x: topRect.minX + 5, y: topRect.minY + 4, width: 44, height: topRect.height - 8)
+        drawLogo(
+            imageData: activeTheme.logoImageData,
+            in: logoRect,
+            fallbackText: document.brandName,
+            cg: context.cgContext,
+            darkBackground: false
+        )
+
         _ = drawText(
             document.brandName,
             style: .caption,
-            at: CGPoint(x: topRect.minX + 8, y: topRect.minY + 6),
+            at: CGPoint(x: logoRect.maxX + 6, y: topRect.minY + 6),
             width: topRect.width * 0.45,
             color: brandColorDark
         )
@@ -1215,7 +1269,7 @@ final class RamsPDFPrintEngine {
         _ = drawText(
             document.referenceCode.ifBlank("RAMS"),
             style: .caption,
-            at: CGPoint(x: topRect.minX + 8, y: topRect.minY + 18),
+            at: CGPoint(x: logoRect.maxX + 6, y: topRect.minY + 18),
             width: topRect.width * 0.45,
             color: mutedTextColor
         )
@@ -1267,10 +1321,10 @@ final class RamsPDFPrintEngine {
             color: mutedTextColor
         )
         _ = drawText(
-            document.title,
+            activeTheme.legalFooterText,
             style: .caption,
-            at: CGPoint(x: shell.contentRect.midX - 100, y: footerY + 3),
-            width: 200,
+            at: CGPoint(x: shell.contentRect.midX - 145, y: footerY + 3),
+            width: 290,
             color: mutedTextColor
         )
         _ = drawText(
@@ -1279,6 +1333,109 @@ final class RamsPDFPrintEngine {
             at: CGPoint(x: shell.contentRect.maxX - 90, y: footerY + 3),
             width: 90,
             color: mutedTextColor
+        )
+    }
+
+    private func drawVerticalGradient(
+        from startColor: UIColor,
+        to endColor: UIColor,
+        in rect: CGRect,
+        cg: CGContext
+    ) {
+        guard let gradient = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: [startColor.cgColor, endColor.cgColor] as CFArray,
+            locations: [0.0, 1.0]
+        ) else {
+            cg.setFillColor(startColor.cgColor)
+            cg.fill(rect)
+            return
+        }
+        cg.saveGState()
+        cg.addRect(rect)
+        cg.clip()
+        cg.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: rect.midX, y: rect.minY),
+            end: CGPoint(x: rect.midX, y: rect.maxY),
+            options: []
+        )
+        cg.restoreGState()
+    }
+
+    private func drawInfoCard(in rect: CGRect, cg: CGContext) {
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: 7)
+        cg.setFillColor(UIColor(white: 0.985, alpha: 1).cgColor)
+        cg.addPath(path.cgPath)
+        cg.fillPath()
+        cg.setStrokeColor(gridStrokeColor.cgColor)
+        cg.addPath(path.cgPath)
+        cg.strokePath()
+    }
+
+    private func drawControlRows(_ rows: [(String, String)], in rect: CGRect, cg: CGContext) {
+        var rowY = rect.minY + 9
+        for (index, row) in rows.enumerated() {
+            _ = drawText(
+                "\(row.0):",
+                style: .caption,
+                at: CGPoint(x: rect.minX + 8, y: rowY),
+                width: 82,
+                color: brandColorDark
+            )
+            rowY = drawText(
+                row.1,
+                style: .body,
+                at: CGPoint(x: rect.minX + 88, y: rowY - 1),
+                width: rect.width - 96
+            ) + 5
+
+            if index < rows.count - 1 {
+                let separator = CGRect(x: rect.minX + 8, y: rowY - 2, width: rect.width - 16, height: 0.6)
+                cg.setFillColor(gridStrokeColor.cgColor)
+                cg.fill(separator)
+                rowY += 4
+            }
+        }
+    }
+
+    private func drawLogo(
+        imageData: Data?,
+        in rect: CGRect,
+        fallbackText: String,
+        cg: CGContext,
+        darkBackground: Bool
+    ) {
+        let bgColor = darkBackground ? UIColor.white.withAlphaComponent(0.18) : UIColor.white
+        let borderColor = darkBackground ? UIColor.white.withAlphaComponent(0.4) : gridStrokeColor
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: 6)
+        cg.setFillColor(bgColor.cgColor)
+        cg.addPath(path.cgPath)
+        cg.fillPath()
+        cg.setStrokeColor(borderColor.cgColor)
+        cg.addPath(path.cgPath)
+        cg.strokePath()
+
+        if let imageData, let image = UIImage(data: imageData), image.size.width > 0 {
+            image.draw(in: rect.insetBy(dx: 4, dy: 4))
+            return
+        }
+
+        let monogram = fallbackText
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap { $0.first }
+            .map(String.init)
+            .joined()
+            .uppercased()
+            .ifBlank("RAMS")
+
+        _ = drawText(
+            monogram,
+            style: .subheading,
+            at: CGPoint(x: rect.minX + 7, y: rect.midY - 8),
+            width: rect.width - 14,
+            color: darkBackground ? .white : brandColorDark
         )
     }
 
@@ -1494,13 +1651,21 @@ enum RamsPDFDocumentBuilder {
         let generatedAt = Date()
         let projectName = master.projectName.ifBlank("Project")
         let reference = rams.referenceCode.ifBlank("RAMS")
+        let revision = revisionCode(from: rams.updatedAt)
+        let theme = RamsPDFBrandTheme.constructionDefault
 
         return RamsPDFDocument(
-            brandName: "Construction RAMS Builder",
+            theme: theme,
+            brandName: theme.companyName,
             title: "RAMS Export: \(rams.title.ifBlank("Untitled RAMS"))",
             subtitle: "\(projectName) | \(reference) | Overall risk \(rams.overallRiskReview.rawValue)",
             projectName: projectName,
+            siteAddress: master.siteAddress,
+            clientName: master.clientName,
             referenceCode: reference,
+            revisionCode: revision,
+            preparedBy: rams.preparedBy,
+            approvedBy: rams.approvedBy,
             generatedAt: generatedAt,
             sections: sections
         )
@@ -1521,6 +1686,12 @@ enum RamsPDFDocumentBuilder {
             entries.append("5. Sign-off")
         }
         return entries
+    }
+
+    private static func revisionCode(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyMMdd"
+        return "Rev-\(formatter.string(from: date))"
     }
 
     private static func buildMasterBlocks(master: MasterDocument) -> [RamsPDFBlock] {
@@ -1814,5 +1985,29 @@ enum RamsPDFDocumentBuilder {
 private extension String {
     func ifBlank(_ fallback: String) -> String {
         trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : self
+    }
+}
+
+private extension UIColor {
+    func blended(withFraction fraction: CGFloat, of color: UIColor) -> UIColor {
+        let f = max(0, min(1, fraction))
+        var r1: CGFloat = 0
+        var g1: CGFloat = 0
+        var b1: CGFloat = 0
+        var a1: CGFloat = 0
+        var r2: CGFloat = 0
+        var g2: CGFloat = 0
+        var b2: CGFloat = 0
+        var a2: CGFloat = 0
+        guard getRed(&r1, green: &g1, blue: &b1, alpha: &a1),
+              color.getRed(&r2, green: &g2, blue: &b2, alpha: &a2) else {
+            return self
+        }
+        return UIColor(
+            red: r1 + ((r2 - r1) * f),
+            green: g1 + ((g2 - g1) * f),
+            blue: b1 + ((b2 - b1) * f),
+            alpha: a1 + ((a2 - a1) * f)
+        )
     }
 }

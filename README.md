@@ -110,6 +110,21 @@ The print engine uses a deterministic A4 pipeline inspired by DOM-prepagination 
    - Section banner styling, weighted table columns, zebra rows, and boxed key-value cards.
    - Dedicated digital signature cards for cleaner sign-off pages.
 
+### Brand matching customization
+
+Brand profile values are centralized in:
+
+- `App/Services/PDFBrandTheme.swift`
+
+You can customize:
+
+- company name and tagline
+- legal footer text
+- core brand colors (primary/secondary/section/grid)
+- logo image by adding an asset named `RAMSLogo` in Xcode (optional fallback monogram is automatic)
+
+`RamsPDFDocumentBuilder` injects this theme into every export so all pages share the same brand system.
+
 ---
 
 ## Future Supabase integration points
