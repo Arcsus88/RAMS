@@ -205,6 +205,14 @@ final class WizardViewModel: ObservableObject {
         ramsDocument.riskAssessments.remove(atOffsets: offsets)
     }
 
+    func togglePPE(_ item: PPEItemID) {
+        if ramsDocument.requiredPPE.contains(item) {
+            ramsDocument.requiredPPE.removeAll(where: { $0 == item })
+        } else {
+            ramsDocument.requiredPPE.append(item)
+        }
+    }
+
     func addSignature(name: String, role: String, signatureImageData: Data) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanRole = role.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -307,6 +315,14 @@ final class WizardViewModel: ObservableObject {
             }
             if ramsDocument.riskAssessments.isEmpty {
                 errorMessage = "Add at least one hazard/risk assessment."
+                return false
+            }
+            let emergencyRequired = [
+                ramsDocument.emergencyFirstAidStation,
+                ramsDocument.emergencyAssemblyPoint
+            ]
+            if emergencyRequired.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                errorMessage = "Add first aid station and assembly point in Emergency Procedures."
                 return false
             }
         case .liftPlan:

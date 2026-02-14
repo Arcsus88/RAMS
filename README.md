@@ -5,7 +5,7 @@ SwiftUI scaffold for a **Construction RAMS Builder** app, including:
 - Login screen (mock auth for now)
 - Wizard flow:
   1. Master Document
-  2. RAMS + Method Statement + Hazard/Risk assessments
+  2. RAMS + Method Statement + PPE + Hazard/Risk assessments + Emergency protocols
   3. Lift Plan (optional, when lifting is involved)
   4. Review + Save + Public Link + Signatures + PDF export
 - Reusable local libraries for:
@@ -22,6 +22,10 @@ SwiftUI scaffold for a **Construction RAMS Builder** app, including:
 - Digital signature capture and signature table
 - PDF export of RAMS, risk details, lift plan, and signatures
 - Public link generator placeholder (local scaffold)
+- React-style RAMS UX mapping:
+  - hazard template quick-add
+  - PPE checklist
+  - emergency procedure section (first aid, assembly point, emergency contact)
 
 > Supabase is intentionally not wired yet; this scaffold is local-first and ready for later Supabase integration.
 
@@ -102,7 +106,7 @@ The print engine uses a deterministic A4 pipeline inspired by DOM-prepagination 
    - Visually empty slices are discarded.
 
 5. **Structured section export**
-   - Contents, Master Document, RAMS Method, Risk Register, optional Lift Plan, Appendices, and Sign-off are rendered as sectioned blocks for predictable page starts and cleaner print output.
+   - Contents, Master Document, RAMS Method, Required PPE, Risk Register, Emergency Procedures, optional Lift Plan, Appendices, and Sign-off are rendered as sectioned blocks for predictable page starts and cleaner print output.
 
 6. **Print-style polish layer**
    - Branded cover page with project/reference metadata.

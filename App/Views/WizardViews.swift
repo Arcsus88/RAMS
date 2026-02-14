@@ -175,6 +175,35 @@ private struct RamsDocumentStepView: View {
                 }
             }
 
+            Section("Required PPE") {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 10)], spacing: 10) {
+                    ForEach(PPEItemID.allCases) { item in
+                        let selected = viewModel.ramsDocument.requiredPPE.contains(item)
+                        Button {
+                            viewModel.togglePPE(item)
+                        } label: {
+                            VStack(spacing: 6) {
+                                Text(item.emoji)
+                                    .font(.title3)
+                                Text(item.title)
+                                    .font(.caption2.weight(.semibold))
+                                    .multilineTextAlignment(.center)
+                                    .foregroundStyle(selected ? .yellow : .primary)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 72)
+                            .padding(8)
+                            .background(selected ? Color.yellow.opacity(0.18) : Color.secondary.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(selected ? Color.yellow : Color.secondary.opacity(0.2), lineWidth: selected ? 2 : 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             Section {
                 HStack {
                     Text("Risk assessments")
@@ -267,6 +296,12 @@ private struct RamsDocumentStepView: View {
                     .padding(.vertical, 6)
                 }
                 .onDelete(perform: viewModel.removeRisks)
+            }
+
+            Section("Emergency procedures") {
+                TextField("First aid station", text: $viewModel.ramsDocument.emergencyFirstAidStation)
+                TextField("Fire assembly point", text: $viewModel.ramsDocument.emergencyAssemblyPoint)
+                TextField("Emergency contact", text: $viewModel.ramsDocument.emergencyContact)
             }
         }
     }
@@ -370,12 +405,14 @@ private struct ReviewExportStepView: View {
                 LabeledContent("RAMS title", value: viewModel.ramsDocument.title.ifEmpty("-"))
                 LabeledContent("Reference", value: viewModel.ramsDocument.referenceCode.ifEmpty("-"))
                 LabeledContent("Hazards", value: "\(viewModel.ramsDocument.riskAssessments.count)")
+                LabeledContent("Required PPE", value: "\(viewModel.ramsDocument.requiredPPE.count)")
                 HStack {
                     Text("Overall risk review")
                     Spacer()
                     RiskReviewBadge(review: viewModel.ramsDocument.overallRiskReview)
                 }
                 LabeledContent("Lift plan included", value: viewModel.includeLiftPlan ? "Yes" : "No")
+                LabeledContent("Emergency contact", value: viewModel.ramsDocument.emergencyContact.ifEmpty("-"))
             }
 
             Section("Digital signatures") {

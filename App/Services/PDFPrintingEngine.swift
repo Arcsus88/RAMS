@@ -743,7 +743,9 @@ final class RamsPDFPrintEngine {
         let lowered = headers.map { $0.lowercased() }
 
         let fractions: [CGFloat]
-        if lowered == ["hazard", "risk to", "initial", "residual", "review"] {
+        if lowered == ["hazard description", "l x s", "control measures"] {
+            fractions = [0.34, 0.18, 0.48]
+        } else if lowered == ["hazard", "risk to", "initial", "residual", "review"] {
             fractions = [0.28, 0.32, 0.12, 0.12, 0.16]
         } else if lowered == ["signer", "role", "signed at"] {
             fractions = [0.3, 0.38, 0.32]
@@ -1591,11 +1593,20 @@ enum RamsPDFDocumentBuilder {
         liftPlan: LiftPlan?,
         signatures: [SignatureRecord]
     ) -> RamsPDFDocument {
+        let appendixBlocks = buildAppendixBlocks(master: master, liftPlan: liftPlan)
+
         let contentsSection = RamsPDFSection(
             title: "Contents",
             forcePageBreakBefore: false,
             blocks: [
-                RamsPDFBlock(content: .bulletList(contentsEntries(includeLiftPlan: liftPlan != nil)))
+                RamsPDFBlock(
+                    content: .bulletList(
+                        contentsEntries(
+                            includeLiftPlan: liftPlan != nil,
+                            includeAppendices: !appendixBlocks.isEmpty
+                        )
+                    )
+                )
             ]
         )
 
@@ -1611,13 +1622,25 @@ enum RamsPDFDocumentBuilder {
             blocks: buildMethodBlocks(rams: rams)
         )
 
+        let ppeSection = RamsPDFSection(
+            title: "Required PPE",
+            forcePageBreakBefore: true,
+            blocks: buildPPEBlocks(rams: rams)
+        )
+
         let riskSection = RamsPDFSection(
             title: "Risk Assessment Register",
             forcePageBreakBefore: true,
             blocks: buildRiskBlocks(rams: rams)
         )
 
-        var sections = [contentsSection, masterSection, methodSection, riskSection]
+        let emergencySection = RamsPDFSection(
+            title: "Emergency Procedures",
+            forcePageBreakBefore: true,
+            blocks: buildEmergencyBlocks(master: master, rams: rams)
+        )
+
+        var sections = [contentsSection, masterSection, methodSection, ppeSection, riskSection, emergencySection]
 
         if let liftPlan {
             sections.append(
@@ -1629,7 +1652,6 @@ enum RamsPDFDocumentBuilder {
             )
         }
 
-        let appendixBlocks = buildAppendixBlocks(master: master, liftPlan: liftPlan)
         if !appendixBlocks.isEmpty {
             sections.append(
                 RamsPDFSection(
@@ -1671,20 +1693,24 @@ enum RamsPDFDocumentBuilder {
         )
     }
 
-    private static func contentsEntries(includeLiftPlan: Bool) -> [String] {
+    private static func contentsEntries(includeLiftPlan: Bool, includeAppendices: Bool) -> [String] {
         var entries = [
             "1. Master Document",
             "2. RAMS Method Statement",
-            "3. Risk Assessment Register"
+            "3. Required PPE",
+            "4. Risk Assessment Register",
+            "5. Emergency Procedures"
         ]
+        var nextIndex = 6
         if includeLiftPlan {
-            entries.append("4. Lift Plan")
-            entries.append("5. Appendices")
-            entries.append("6. Sign-off")
-        } else {
-            entries.append("4. Appendices")
-            entries.append("5. Sign-off")
+            entries.append("\(nextIndex). Lift Plan")
+            nextIndex += 1
         }
+        if includeAppendices {
+            entries.append("\(nextIndex). Appendices")
+            nextIndex += 1
+        }
+        entries.append("\(nextIndex). Sign-off")
         return entries
     }
 
@@ -1786,14 +1812,41 @@ enum RamsPDFDocumentBuilder {
         return blocks
     }
 
+    private static func buildPPEBlocks(rams: RamsDocument) -> [RamsPDFBlock] {
+        if rams.requiredPPE.isEmpty {
+            return [
+                RamsPDFBlock(
+                    content: .paragraph(
+                        text: "No PPE specified.",
+                        style: .body
+                    )
+                )
+            ]
+        }
+
+        let ppeItems = rams.requiredPPE
+            .sorted { $0.title < $1.title }
+            .map { "\($0.emoji) \($0.title)" }
+
+        return [
+            RamsPDFBlock(
+                content: .paragraph(
+                    text: "Mandatory PPE for this activity:",
+                    style: .subheading
+                )
+            ),
+            RamsPDFBlock(content: .bulletList(ppeItems))
+        ]
+    }
+
     private static func buildRiskBlocks(rams: RamsDocument) -> [RamsPDFBlock] {
         let registerRows = rams.riskAssessments.map { risk in
+            let controls = risk.controlMeasures.isEmpty ? "-" : risk.controlMeasures.joined(separator: "; ")
+            let matrix = "\(risk.initialLikelihood)x\(risk.initialSeverity)=\(risk.initialScore) | R:\(risk.residualScore) \(risk.overallReview.rawValue)"
             [
                 risk.hazardTitle.ifBlank("-"),
-                risk.riskTo.ifBlank("-"),
-                "\(risk.initialScore)",
-                "\(risk.residualScore)",
-                "\(risk.overallReview.rawValue) \(risk.overallReview.title)"
+                matrix,
+                controls
             ]
         }
 
@@ -1801,7 +1854,7 @@ enum RamsPDFDocumentBuilder {
             RamsPDFBlock(
                 content: .table(
                     title: "Risk register",
-                    headers: ["Hazard", "Risk to", "Initial", "Residual", "Review"],
+                    headers: ["Hazard Description", "L x S", "Control Measures"],
                     rows: registerRows
                 )
             ),
@@ -1850,6 +1903,30 @@ enum RamsPDFDocumentBuilder {
         )
 
         return blocks
+    }
+
+    private static func buildEmergencyBlocks(master: MasterDocument, rams: RamsDocument) -> [RamsPDFBlock] {
+        let contact = rams.emergencyContact.ifBlank(master.emergencyContactPhone.ifBlank("TBC"))
+        let firstAid = rams.emergencyFirstAidStation.ifBlank("Main site office")
+        let assembly = rams.emergencyAssemblyPoint.ifBlank("Main gate")
+
+        return [
+            RamsPDFBlock(
+                content: .keyValueRows([
+                    ("First aid station", firstAid),
+                    ("Assembly point", assembly),
+                    ("Emergency contact", contact),
+                    ("Nearest hospital", master.nearestHospitalName.ifBlank("-")),
+                    ("Hospital address", master.nearestHospitalAddress.ifBlank("-"))
+                ])
+            ),
+            RamsPDFBlock(
+                content: .paragraph(
+                    text: "Hospital directions: \(master.hospitalDirections.ifBlank("-"))",
+                    style: .body
+                )
+            )
+        ]
     }
 
     private static func buildLiftPlanBlocks(liftPlan: LiftPlan) -> [RamsPDFBlock] {

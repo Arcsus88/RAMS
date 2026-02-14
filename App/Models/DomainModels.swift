@@ -115,6 +115,56 @@ struct HazardTemplate: Identifiable, Codable, Hashable {
     }
 }
 
+enum PPEItemID: String, Codable, CaseIterable, Identifiable {
+    case hardhat
+    case boots
+    case vest
+    case gloves
+    case glasses
+    case mask
+    case ear
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .hardhat:
+            return "Hard Hat"
+        case .boots:
+            return "Safety Boots"
+        case .vest:
+            return "Hi-Vis Vest"
+        case .gloves:
+            return "Gloves"
+        case .glasses:
+            return "Eye Protection"
+        case .mask:
+            return "Dust Mask (FFP3)"
+        case .ear:
+            return "Ear Protection"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .hardhat:
+            return "👷"
+        case .boots:
+            return "🥾"
+        case .vest:
+            return "🦺"
+        case .gloves:
+            return "🧤"
+        case .glasses:
+            return "🥽"
+        case .mask:
+            return "😷"
+        case .ear:
+            return "🎧"
+        }
+    }
+}
+
 struct KeyContact: Identifiable, Codable, Hashable {
     var id: UUID
     var name: String
@@ -173,7 +223,11 @@ struct RamsDocument: Identifiable, Codable, Hashable {
     var preparedBy: String
     var approvedBy: String
     var methodStatements: [MethodStatementStep]
+    var requiredPPE: [PPEItemID]
     var riskAssessments: [RiskAssessment]
+    var emergencyFirstAidStation: String
+    var emergencyAssemblyPoint: String
+    var emergencyContact: String
     var requiresLiftingPlan: Bool
     var signatureTable: [SignatureRecord]
     var createdAt: Date
@@ -184,21 +238,103 @@ struct RamsDocument: Identifiable, Codable, Hashable {
         return RiskScoreMatrix.review(for: highestResidual)
     }
 
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        referenceCode: String = "",
+        scopeOfWorks: String = "",
+        preparedBy: String = "",
+        approvedBy: String = "",
+        methodStatements: [MethodStatementStep] = [MethodStatementStep(sequence: 1, title: "", details: "")],
+        requiredPPE: [PPEItemID] = [],
+        riskAssessments: [RiskAssessment] = [],
+        emergencyFirstAidStation: String = "Main site office",
+        emergencyAssemblyPoint: String = "Main Gate",
+        emergencyContact: String = "",
+        requiresLiftingPlan: Bool = false,
+        signatureTable: [SignatureRecord] = [],
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.referenceCode = referenceCode
+        self.scopeOfWorks = scopeOfWorks
+        self.preparedBy = preparedBy
+        self.approvedBy = approvedBy
+        self.methodStatements = methodStatements
+        self.requiredPPE = requiredPPE
+        self.riskAssessments = riskAssessments
+        self.emergencyFirstAidStation = emergencyFirstAidStation
+        self.emergencyAssemblyPoint = emergencyAssemblyPoint
+        self.emergencyContact = emergencyContact
+        self.requiresLiftingPlan = requiresLiftingPlan
+        self.signatureTable = signatureTable
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
     static func draft() -> RamsDocument {
-        RamsDocument(
-            id: UUID(),
-            title: "",
-            referenceCode: "",
-            scopeOfWorks: "",
-            preparedBy: "",
-            approvedBy: "",
-            methodStatements: [MethodStatementStep(sequence: 1, title: "", details: "")],
-            riskAssessments: [],
-            requiresLiftingPlan: false,
-            signatureTable: [],
-            createdAt: Date(),
-            updatedAt: Date()
-        )
+        RamsDocument()
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case referenceCode
+        case scopeOfWorks
+        case preparedBy
+        case approvedBy
+        case methodStatements
+        case requiredPPE
+        case riskAssessments
+        case emergencyFirstAidStation
+        case emergencyAssemblyPoint
+        case emergencyContact
+        case requiresLiftingPlan
+        case signatureTable
+        case createdAt
+        case updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        referenceCode = try container.decode(String.self, forKey: .referenceCode)
+        scopeOfWorks = try container.decode(String.self, forKey: .scopeOfWorks)
+        preparedBy = try container.decode(String.self, forKey: .preparedBy)
+        approvedBy = try container.decode(String.self, forKey: .approvedBy)
+        methodStatements = try container.decodeIfPresent([MethodStatementStep].self, forKey: .methodStatements) ?? []
+        requiredPPE = try container.decodeIfPresent([PPEItemID].self, forKey: .requiredPPE) ?? []
+        riskAssessments = try container.decodeIfPresent([RiskAssessment].self, forKey: .riskAssessments) ?? []
+        emergencyFirstAidStation = try container.decodeIfPresent(String.self, forKey: .emergencyFirstAidStation) ?? "Main site office"
+        emergencyAssemblyPoint = try container.decodeIfPresent(String.self, forKey: .emergencyAssemblyPoint) ?? "Main Gate"
+        emergencyContact = try container.decodeIfPresent(String.self, forKey: .emergencyContact) ?? ""
+        requiresLiftingPlan = try container.decodeIfPresent(Bool.self, forKey: .requiresLiftingPlan) ?? false
+        signatureTable = try container.decodeIfPresent([SignatureRecord].self, forKey: .signatureTable) ?? []
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(referenceCode, forKey: .referenceCode)
+        try container.encode(scopeOfWorks, forKey: .scopeOfWorks)
+        try container.encode(preparedBy, forKey: .preparedBy)
+        try container.encode(approvedBy, forKey: .approvedBy)
+        try container.encode(methodStatements, forKey: .methodStatements)
+        try container.encode(requiredPPE, forKey: .requiredPPE)
+        try container.encode(riskAssessments, forKey: .riskAssessments)
+        try container.encode(emergencyFirstAidStation, forKey: .emergencyFirstAidStation)
+        try container.encode(emergencyAssemblyPoint, forKey: .emergencyAssemblyPoint)
+        try container.encode(emergencyContact, forKey: .emergencyContact)
+        try container.encode(requiresLiftingPlan, forKey: .requiresLiftingPlan)
+        try container.encode(signatureTable, forKey: .signatureTable)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
     }
 }
 
@@ -309,13 +445,13 @@ struct LibraryBundle: Codable, Hashable {
             hazards: [
                 HazardTemplate(
                     id: UUID(),
-                    category: "Access",
-                    title: "Working at height",
-                    riskToDefault: "Operatives, supervisors, visitors",
+                    category: "Height",
+                    title: "Falling from ladders/scaffold",
+                    riskToDefault: "Operatives and nearby workers",
                     controlMeasuresDefault: [
-                        "Use inspected towers or MEWPs with valid tags",
-                        "Maintain 3 points of contact and secure materials",
-                        "Exclude and signpost drop zones below work area"
+                        "Ensure level ground",
+                        "Maintain three points of contact",
+                        "Use guard rails and inspected access equipment"
                     ],
                     defaultInitialLikelihood: 4,
                     defaultInitialSeverity: 5,
@@ -324,13 +460,43 @@ struct LibraryBundle: Codable, Hashable {
                 ),
                 HazardTemplate(
                     id: UUID(),
-                    category: "Plant",
-                    title: "Plant and vehicle movement",
-                    riskToDefault: "Operatives, banksman, public",
+                    category: "Electrical",
+                    title: "Contact with live wires",
+                    riskToDefault: "Operatives and supervisors",
                     controlMeasuresDefault: [
-                        "Use designated banksman with clear communication",
-                        "Maintain segregated pedestrian routes",
-                        "Apply one-way systems and speed controls"
+                        "Isolate power sources before work",
+                        "Use 110v equipment where applicable",
+                        "Complete visual checks before use"
+                    ],
+                    defaultInitialLikelihood: 4,
+                    defaultInitialSeverity: 5,
+                    defaultResidualLikelihood: 2,
+                    defaultResidualSeverity: 2
+                ),
+                HazardTemplate(
+                    id: UUID(),
+                    category: "Manual Handling",
+                    title: "Heavy lifting of materials",
+                    riskToDefault: "Operatives",
+                    controlMeasuresDefault: [
+                        "Use trolleys or mechanical aids",
+                        "Apply two-person lifts for bulky loads",
+                        "Use correct lifting posture and rest breaks"
+                    ],
+                    defaultInitialLikelihood: 3,
+                    defaultInitialSeverity: 4,
+                    defaultResidualLikelihood: 2,
+                    defaultResidualSeverity: 2
+                ),
+                HazardTemplate(
+                    id: UUID(),
+                    category: "Environment",
+                    title: "Dust inhalation (Silica)",
+                    riskToDefault: "Operatives and nearby trades",
+                    controlMeasuresDefault: [
+                        "Use on-tool extraction with M-Class vacuum",
+                        "Wear FFP3 masks",
+                        "Dampen dust and clean work area frequently"
                     ],
                     defaultInitialLikelihood: 4,
                     defaultInitialSeverity: 4,
@@ -339,18 +505,18 @@ struct LibraryBundle: Codable, Hashable {
                 ),
                 HazardTemplate(
                     id: UUID(),
-                    category: "Lifting",
-                    title: "Suspended load during lifting operation",
-                    riskToDefault: "Slinger/signaller, crane operator, nearby workers",
+                    category: "Public",
+                    title: "Pedestrian access to work area",
+                    riskToDefault: "Public and visitors",
                     controlMeasuresDefault: [
-                        "Lift plan approved by appointed person",
-                        "Certified lifting accessories inspected before use",
-                        "No persons under suspended loads"
+                        "Install barriers and signage",
+                        "Maintain exclusion zones",
+                        "Assign banksman for interface points"
                     ],
                     defaultInitialLikelihood: 5,
-                    defaultInitialSeverity: 5,
+                    defaultInitialSeverity: 4,
                     defaultResidualLikelihood: 2,
-                    defaultResidualSeverity: 3
+                    defaultResidualSeverity: 2
                 )
             ],
             masterDocuments: [],
