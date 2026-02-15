@@ -179,6 +179,32 @@ struct KeyContact: Identifiable, Codable, Hashable {
     }
 }
 
+struct SavedProject: Identifiable, Codable, Hashable {
+    var id: UUID
+    var name: String
+    var siteAddress: String
+    var clientName: String
+    var principalContractor: String
+    var referenceCode: String
+    var lastUpdatedAt: Date
+}
+
+struct SavedContact: Identifiable, Codable, Hashable {
+    var id: UUID
+    var firstName: String
+    var lastName: String
+    var role: String
+    var phone: String
+    var email: String
+    var lastUsedAt: Date
+
+    var fullName: String {
+        let value = "\(firstName) \(lastName)"
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value
+    }
+}
+
 struct MasterDocument: Identifiable, Codable, Hashable {
     var id: UUID
     var projectName: String
@@ -431,7 +457,26 @@ struct SignatureRecord: Identifiable, Codable, Hashable {
 struct AuthUser: Identifiable, Codable, Hashable {
     var id: UUID
     var email: String
-    var displayName: String
+    var firstName: String
+    var lastName: String
+
+    var displayName: String {
+        let value = "\(firstName) \(lastName)"
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? email : value
+    }
+
+    init(
+        id: UUID = UUID(),
+        email: String,
+        firstName: String,
+        lastName: String
+    ) {
+        self.id = id
+        self.email = email
+        self.firstName = firstName
+        self.lastName = lastName
+    }
 }
 
 struct LibraryBundle: Codable, Hashable {
@@ -439,6 +484,53 @@ struct LibraryBundle: Codable, Hashable {
     var masterDocuments: [MasterDocument]
     var ramsDocuments: [RamsDocument]
     var liftPlans: [LiftPlan]
+    var projects: [SavedProject]
+    var contacts: [SavedContact]
+
+    init(
+        hazards: [HazardTemplate],
+        masterDocuments: [MasterDocument],
+        ramsDocuments: [RamsDocument],
+        liftPlans: [LiftPlan],
+        projects: [SavedProject],
+        contacts: [SavedContact]
+    ) {
+        self.hazards = hazards
+        self.masterDocuments = masterDocuments
+        self.ramsDocuments = ramsDocuments
+        self.liftPlans = liftPlans
+        self.projects = projects
+        self.contacts = contacts
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case hazards
+        case masterDocuments
+        case ramsDocuments
+        case liftPlans
+        case projects
+        case contacts
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hazards = try container.decodeIfPresent([HazardTemplate].self, forKey: .hazards) ?? []
+        masterDocuments = try container.decodeIfPresent([MasterDocument].self, forKey: .masterDocuments) ?? []
+        ramsDocuments = try container.decodeIfPresent([RamsDocument].self, forKey: .ramsDocuments) ?? []
+        liftPlans = try container.decodeIfPresent([LiftPlan].self, forKey: .liftPlans) ?? []
+        projects = try container.decodeIfPresent([SavedProject].self, forKey: .projects) ?? []
+        contacts = try container.decodeIfPresent([SavedContact].self, forKey: .contacts) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(hazards, forKey: .hazards)
+        try container.encode(masterDocuments, forKey: .masterDocuments)
+        try container.encode(ramsDocuments, forKey: .ramsDocuments)
+        try container.encode(liftPlans, forKey: .liftPlans)
+        try container.encode(projects, forKey: .projects)
+        try container.encode(contacts, forKey: .contacts)
+    }
 
     static var seeded: LibraryBundle {
         LibraryBundle(
@@ -521,7 +613,9 @@ struct LibraryBundle: Codable, Hashable {
             ],
             masterDocuments: [],
             ramsDocuments: [],
-            liftPlans: []
+            liftPlans: [],
+            projects: [],
+            contacts: []
         )
     }
 }

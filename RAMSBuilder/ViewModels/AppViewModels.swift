@@ -25,6 +25,34 @@ final class SessionViewModel: ObservableObject {
         }
     }
 
+    func register(
+        firstName: String,
+        lastName: String,
+        email: String,
+        password: String,
+        confirmPassword: String
+    ) async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        guard password == confirmPassword else {
+            errorMessage = "Password and confirm password must match."
+            return
+        }
+
+        do {
+            currentUser = try await authService.register(
+                firstName: firstName,
+                lastName: lastName,
+                email: email,
+                password: password
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func logout() {
         authService.logout()
         currentUser = nil
@@ -83,6 +111,63 @@ final class LibraryViewModel: ObservableObject {
         persist()
     }
 
+    func saveProject(_ project: SavedProject) {
+        upsert(project, in: &library.projects)
+        persist()
+    }
+
+    func saveContact(_ contact: SavedContact) {
+        let trimmedName = contact.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPhone = contact.phone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedEmail = contact.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        guard !trimmedName.isEmpty else { return }
+
+        if let existingIndex = library.contacts.firstIndex(where: { existing in
+            let existingName = existing.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let existingPhone = existing.phone.trimmingCharacters(in: .whitespacesAndNewlines)
+            let existingEmail = existing.email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return existingName.caseInsensitiveCompare(trimmedName) == .orderedSame
+                && (existingPhone == trimmedPhone || (!normalizedEmail.isEmpty && existingEmail == normalizedEmail))
+        }) {
+            library.contacts[existingIndex] = contact
+        } else {
+            library.contacts.insert(contact, at: 0)
+        }
+        persist()
+    }
+
+    func saveContacts(_ contacts: [SavedContact]) {
+        for contact in contacts {
+            saveContact(contact)
+        }
+    }
+
+    var contactNameOptions: [String] {
+        deduplicatedNonEmpty(library.contacts.map(\.fullName))
+    }
+
+    var companyNameOptions: [String] {
+        deduplicatedNonEmpty(library.projects.flatMap { [$0.clientName, $0.principalContractor] })
+    }
+
+    var projectNameOptions: [String] {
+        deduplicatedNonEmpty(library.projects.map(\.name))
+    }
+
+    var contactRoleOptions: [String] {
+        let defaults = [
+            "Site Manager",
+            "Project Manager",
+            "Principal Contractor",
+            "Client Representative",
+            "Safety Officer",
+            "Appointed Person",
+            "Emergency Contact"
+        ]
+        return deduplicatedNonEmpty(defaults + library.contacts.map(\.role))
+    }
+
     private func persist() {
         do {
             try store.saveLibrary(library)
@@ -97,6 +182,20 @@ final class LibraryViewModel: ObservableObject {
         } else {
             array.insert(element, at: 0)
         }
+    }
+
+    private func deduplicatedNonEmpty(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for raw in values {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.lowercased()
+            if seen.insert(key).inserted {
+                ordered.append(trimmed)
+            }
+        }
+        return ordered
     }
 }
 
@@ -125,20 +224,24 @@ final class WizardViewModel: ObservableObject {
     private let libraryViewModel: LibraryViewModel
     private let publicLinkService: PublicLinkService
     private let pdfExportService: PDFExportService
+    private let userProvider: () -> AuthUser?
 
     init(
         libraryViewModel: LibraryViewModel,
         publicLinkService: PublicLinkService = PublicLinkService(),
-        pdfExportService: PDFExportService = PDFExportService()
+        pdfExportService: PDFExportService = PDFExportService(),
+        userProvider: @escaping () -> AuthUser? = { nil }
     ) {
         self.libraryViewModel = libraryViewModel
         self.publicLinkService = publicLinkService
         self.pdfExportService = pdfExportService
+        self.userProvider = userProvider
 
         self.masterDocument = MasterDocument.draft()
         self.ramsDocument = RamsDocument.draft()
         self.liftPlan = LiftPlan.draft()
         self.ramsDocument.referenceCode = Self.makeReferenceCode()
+        applyCurrentUserDefaults(force: true)
     }
 
     var orderedSteps: [WizardStep] {
@@ -252,7 +355,21 @@ final class WizardViewModel: ObservableObject {
             libraryViewModel.saveLiftPlan(liftPlan)
         }
 
-        statusMessage = "Saved to local libraries."
+        let project = SavedProject(
+            id: masterDocument.id,
+            name: masterDocument.projectName.trimmingCharacters(in: .whitespacesAndNewlines),
+            siteAddress: masterDocument.siteAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+            clientName: masterDocument.clientName.trimmingCharacters(in: .whitespacesAndNewlines),
+            principalContractor: masterDocument.principalContractor.trimmingCharacters(in: .whitespacesAndNewlines),
+            referenceCode: ramsDocument.referenceCode.trimmingCharacters(in: .whitespacesAndNewlines),
+            lastUpdatedAt: now
+        )
+        if !project.name.isEmpty {
+            libraryViewModel.saveProject(project)
+        }
+
+        libraryViewModel.saveContacts(extractContacts(referenceDate: now))
+        statusMessage = "Saved RAMS package, project profile, and contacts to local libraries."
     }
 
     func generatePublicLink() {
@@ -288,6 +405,109 @@ final class WizardViewModel: ObservableObject {
         exportedPDFURL = nil
         statusMessage = nil
         errorMessage = nil
+        applyCurrentUserDefaults(force: true)
+    }
+
+    func applySavedProject(_ project: SavedProject) {
+        masterDocument.projectName = project.name
+        masterDocument.siteAddress = project.siteAddress
+        masterDocument.clientName = project.clientName
+        masterDocument.principalContractor = project.principalContractor
+        if ramsDocument.referenceCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ramsDocument.referenceCode = project.referenceCode
+        }
+    }
+
+    func applyCurrentUserDefaults(force: Bool = false) {
+        guard let user = userProvider() else { return }
+        let fullName = user.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !fullName.isEmpty else { return }
+
+        if force || masterDocument.emergencyContactName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.emergencyContactName = fullName
+        }
+        if masterDocument.keyContacts.isEmpty {
+            masterDocument.keyContacts = [KeyContact()]
+        }
+        if force || masterDocument.keyContacts[0].name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.keyContacts[0].name = fullName
+        }
+        if force || masterDocument.keyContacts[0].role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.keyContacts[0].role = "Safety Officer"
+        }
+
+        if force || ramsDocument.preparedBy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ramsDocument.preparedBy = fullName
+        }
+        if force || ramsDocument.approvedBy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ramsDocument.approvedBy = fullName
+        }
+        if force || ramsDocument.emergencyContact.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ramsDocument.emergencyContact = fullName
+        }
+
+        if force || liftPlan.appointedPerson.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            liftPlan.appointedPerson = fullName
+        }
+        if force || liftPlan.craneSupervisor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            liftPlan.craneSupervisor = fullName
+        }
+    }
+
+    private func extractContacts(referenceDate: Date) -> [SavedContact] {
+        var contacts: [SavedContact] = []
+
+        for keyContact in masterDocument.keyContacts {
+            let trimmedName = keyContact.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let contact = makeContact(
+                fullName: trimmedName,
+                role: keyContact.role,
+                phone: keyContact.phone,
+                email: ""
+            ) {
+                contacts.append(contact.withDate(referenceDate))
+            }
+        }
+
+        let automaticCandidates: [(name: String, role: String, phone: String, email: String)] = [
+            (masterDocument.emergencyContactName, "Emergency Contact", masterDocument.emergencyContactPhone, ""),
+            (ramsDocument.preparedBy, "Prepared By", "", userProvider()?.email ?? ""),
+            (ramsDocument.approvedBy, "Approved By", "", ""),
+            (liftPlan.appointedPerson, "Appointed Person", "", ""),
+            (liftPlan.craneSupervisor, "Crane Supervisor", "", ""),
+            (liftPlan.liftOperator, "Lift Operator", "", ""),
+            (liftPlan.slingerSignaller, "Slinger / Signaller", "", "")
+        ]
+
+        for candidate in automaticCandidates {
+            if let contact = makeContact(
+                fullName: candidate.name,
+                role: candidate.role,
+                phone: candidate.phone,
+                email: candidate.email
+            ) {
+                contacts.append(contact.withDate(referenceDate))
+            }
+        }
+
+        return contacts
+    }
+
+    private func makeContact(fullName: String, role: String, phone: String, email: String) -> SavedContact? {
+        let cleanName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else { return nil }
+        let parts = cleanName.split(separator: " ").map(String.init)
+        let firstName = parts.first ?? cleanName
+        let lastName = parts.dropFirst().joined(separator: " ")
+        return SavedContact(
+            id: UUID(),
+            firstName: firstName,
+            lastName: lastName,
+            role: role.trimmingCharacters(in: .whitespacesAndNewlines),
+            phone: phone.trimmingCharacters(in: .whitespacesAndNewlines),
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+            lastUsedAt: Date()
+        )
     }
 
     private func validateCurrentStep() -> Bool {
@@ -349,5 +569,13 @@ final class WizardViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmm"
         return "RAMS-\(formatter.string(from: Date()))"
+    }
+}
+
+private extension SavedContact {
+    func withDate(_ date: Date) -> SavedContact {
+        var copy = self
+        copy.lastUsedAt = date
+        return copy
     }
 }

@@ -135,23 +135,57 @@ struct WizardFlowView: View {
 
 private struct MasterDocumentStepView: View {
     @ObservedObject var viewModel: WizardViewModel
+    @EnvironmentObject private var libraryViewModel: LibraryViewModel
 
     var body: some View {
         Form {
             Section("Project info") {
+                if !libraryViewModel.library.projects.isEmpty {
+                    Menu {
+                        ForEach(libraryViewModel.library.projects) { project in
+                            Button(project.name.ifEmpty("Untitled project")) {
+                                viewModel.applySavedProject(project)
+                            }
+                        }
+                    } label: {
+                        Label("Use saved project profile", systemImage: "tray.full")
+                    }
+                }
+
                 TextField("Project name", text: $viewModel.masterDocument.projectName)
-                TextField("Site address", text: $viewModel.masterDocument.siteAddress, axis: .vertical)
-                    .lineLimit(2...4)
-                TextField("Client", text: $viewModel.masterDocument.clientName)
-                TextField("Principal contractor", text: $viewModel.masterDocument.principalContractor)
+                AddressAutocompleteField(
+                    title: "Site address",
+                    placeholder: "Start typing site address...",
+                    text: $viewModel.masterDocument.siteAddress
+                )
+                DropdownTextField(
+                    title: "Client",
+                    placeholder: "Client name",
+                    text: $viewModel.masterDocument.clientName,
+                    options: libraryViewModel.companyNameOptions
+                )
+                DropdownTextField(
+                    title: "Principal contractor",
+                    placeholder: "Principal contractor",
+                    text: $viewModel.masterDocument.principalContractor,
+                    options: libraryViewModel.companyNameOptions
+                )
             }
 
             Section("Emergency details") {
-                TextField("Emergency contact name", text: $viewModel.masterDocument.emergencyContactName)
+                DropdownTextField(
+                    title: "Emergency contact name",
+                    placeholder: "Emergency contact",
+                    text: $viewModel.masterDocument.emergencyContactName,
+                    options: libraryViewModel.contactNameOptions
+                )
                 TextField("Emergency contact phone", text: $viewModel.masterDocument.emergencyContactPhone)
                 TextField("Nearest hospital", text: $viewModel.masterDocument.nearestHospitalName)
-                TextField("Hospital address", text: $viewModel.masterDocument.nearestHospitalAddress, axis: .vertical)
-                    .lineLimit(2...4)
+                AddressAutocompleteField(
+                    title: "Hospital address",
+                    placeholder: "Start typing hospital address...",
+                    text: $viewModel.masterDocument.nearestHospitalAddress
+                )
                 TextField("Directions to hospital", text: $viewModel.masterDocument.hospitalDirections, axis: .vertical)
                     .lineLimit(3...6)
             }
@@ -159,8 +193,18 @@ private struct MasterDocumentStepView: View {
             Section("Key contacts") {
                 ForEach($viewModel.masterDocument.keyContacts) { $contact in
                     VStack(alignment: .leading, spacing: 8) {
-                        TextField("Name", text: $contact.name)
-                        TextField("Role", text: $contact.role)
+                        DropdownTextField(
+                            title: "Name",
+                            placeholder: "Contact name",
+                            text: $contact.name,
+                            options: libraryViewModel.contactNameOptions
+                        )
+                        DropdownTextField(
+                            title: "Role",
+                            placeholder: "Contact role",
+                            text: $contact.role,
+                            options: libraryViewModel.contactRoleOptions
+                        )
                         TextField("Phone", text: $contact.phone)
                     }
                     .padding(.vertical, 4)
@@ -180,20 +224,46 @@ private struct MasterDocumentStepView: View {
                 MapImagePickerView(imageData: $viewModel.masterDocument.mapImageData)
             }
         }
+        .onAppear {
+            viewModel.applyCurrentUserDefaults()
+        }
     }
 }
 
 private struct RamsDocumentStepView: View {
     @ObservedObject var viewModel: WizardViewModel
     @Binding var showHazardPicker: Bool
+    @EnvironmentObject private var libraryViewModel: LibraryViewModel
+
+    private let emergencyAidOptions = [
+        "Main site office",
+        "Gatehouse first aid station",
+        "Welfare cabin"
+    ]
+
+    private let assemblyPointOptions = [
+        "Main Gate",
+        "North car park",
+        "Site welfare area"
+    ]
 
     var body: some View {
         Form {
             Section("RAMS details") {
                 TextField("RAMS title", text: $viewModel.ramsDocument.title)
                 TextField("Reference code", text: $viewModel.ramsDocument.referenceCode)
-                TextField("Prepared by", text: $viewModel.ramsDocument.preparedBy)
-                TextField("Approved by", text: $viewModel.ramsDocument.approvedBy)
+                DropdownTextField(
+                    title: "Prepared by",
+                    placeholder: "Prepared by",
+                    text: $viewModel.ramsDocument.preparedBy,
+                    options: libraryViewModel.contactNameOptions
+                )
+                DropdownTextField(
+                    title: "Approved by",
+                    placeholder: "Approved by",
+                    text: $viewModel.ramsDocument.approvedBy,
+                    options: libraryViewModel.contactNameOptions
+                )
                 TextField("Scope of works", text: $viewModel.ramsDocument.scopeOfWorks, axis: .vertical)
                     .lineLimit(3...6)
 
@@ -307,26 +377,42 @@ private struct RamsDocumentStepView: View {
                         Grid(horizontalSpacing: 10, verticalSpacing: 8) {
                             GridRow {
                                 Text("Initial L")
-                                Stepper("", value: $risk.initialLikelihood, in: 1...5)
-                                    .labelsHidden()
+                                Picker("Initial L", selection: $risk.initialLikelihood) {
+                                    ForEach(1...5, id: \.self) { value in
+                                        Text("\(value)").tag(value)
+                                    }
+                                }
+                                .pickerStyle(.menu)
                                 Text("\(risk.initialLikelihood)")
                             }
                             GridRow {
                                 Text("Initial S")
-                                Stepper("", value: $risk.initialSeverity, in: 1...5)
-                                    .labelsHidden()
+                                Picker("Initial S", selection: $risk.initialSeverity) {
+                                    ForEach(1...5, id: \.self) { value in
+                                        Text("\(value)").tag(value)
+                                    }
+                                }
+                                .pickerStyle(.menu)
                                 Text("\(risk.initialSeverity)")
                             }
                             GridRow {
                                 Text("Residual L")
-                                Stepper("", value: $risk.residualLikelihood, in: 1...5)
-                                    .labelsHidden()
+                                Picker("Residual L", selection: $risk.residualLikelihood) {
+                                    ForEach(1...5, id: \.self) { value in
+                                        Text("\(value)").tag(value)
+                                    }
+                                }
+                                .pickerStyle(.menu)
                                 Text("\(risk.residualLikelihood)")
                             }
                             GridRow {
                                 Text("Residual S")
-                                Stepper("", value: $risk.residualSeverity, in: 1...5)
-                                    .labelsHidden()
+                                Picker("Residual S", selection: $risk.residualSeverity) {
+                                    ForEach(1...5, id: \.self) { value in
+                                        Text("\(value)").tag(value)
+                                    }
+                                }
+                                .pickerStyle(.menu)
                                 Text("\(risk.residualSeverity)")
                             }
                         }
@@ -345,9 +431,24 @@ private struct RamsDocumentStepView: View {
             }
 
             Section("Emergency procedures") {
-                TextField("First aid station", text: $viewModel.ramsDocument.emergencyFirstAidStation)
-                TextField("Fire assembly point", text: $viewModel.ramsDocument.emergencyAssemblyPoint)
-                TextField("Emergency contact", text: $viewModel.ramsDocument.emergencyContact)
+                DropdownTextField(
+                    title: "First aid station",
+                    placeholder: "First aid station",
+                    text: $viewModel.ramsDocument.emergencyFirstAidStation,
+                    options: emergencyAidOptions
+                )
+                DropdownTextField(
+                    title: "Fire assembly point",
+                    placeholder: "Assembly point",
+                    text: $viewModel.ramsDocument.emergencyAssemblyPoint,
+                    options: assemblyPointOptions
+                )
+                DropdownTextField(
+                    title: "Emergency contact",
+                    placeholder: "Emergency contact",
+                    text: $viewModel.ramsDocument.emergencyContact,
+                    options: libraryViewModel.contactNameOptions
+                )
             }
         }
     }
@@ -355,6 +456,13 @@ private struct RamsDocumentStepView: View {
 
 private struct LiftPlanStepView: View {
     @ObservedObject var viewModel: WizardViewModel
+    @EnvironmentObject private var libraryViewModel: LibraryViewModel
+
+    private let communicationOptions = [
+        "Two-way radios",
+        "Standard hand signals",
+        "Radio + hand signals"
+    ]
 
     var body: some View {
         Form {
@@ -376,16 +484,49 @@ private struct LiftPlanStepView: View {
             }
 
             Section("People and communication") {
-                TextField("Appointed person", text: $viewModel.liftPlan.appointedPerson)
-                TextField("Crane supervisor", text: $viewModel.liftPlan.craneSupervisor)
-                TextField("Lift operator", text: $viewModel.liftPlan.liftOperator)
-                TextField("Slinger / signaller", text: $viewModel.liftPlan.slingerSignaller)
-                TextField("Communication method", text: $viewModel.liftPlan.communicationMethod)
+                DropdownTextField(
+                    title: "Appointed person",
+                    placeholder: "Appointed person",
+                    text: $viewModel.liftPlan.appointedPerson,
+                    options: libraryViewModel.contactNameOptions
+                )
+                DropdownTextField(
+                    title: "Crane supervisor",
+                    placeholder: "Crane supervisor",
+                    text: $viewModel.liftPlan.craneSupervisor,
+                    options: libraryViewModel.contactNameOptions
+                )
+                DropdownTextField(
+                    title: "Lift operator",
+                    placeholder: "Lift operator",
+                    text: $viewModel.liftPlan.liftOperator,
+                    options: libraryViewModel.contactNameOptions
+                )
+                DropdownTextField(
+                    title: "Slinger / signaller",
+                    placeholder: "Slinger / signaller",
+                    text: $viewModel.liftPlan.slingerSignaller,
+                    options: libraryViewModel.contactNameOptions
+                )
+                DropdownTextField(
+                    title: "Communication method",
+                    placeholder: "Communication method",
+                    text: $viewModel.liftPlan.communicationMethod,
+                    options: communicationOptions
+                )
             }
 
             Section("Locations and controls") {
-                TextField("Setup location", text: $viewModel.liftPlan.setupLocation)
-                TextField("Landing location", text: $viewModel.liftPlan.landingLocation)
+                AddressAutocompleteField(
+                    title: "Setup location",
+                    placeholder: "Start typing setup location...",
+                    text: $viewModel.liftPlan.setupLocation
+                )
+                AddressAutocompleteField(
+                    title: "Landing location",
+                    placeholder: "Start typing landing location...",
+                    text: $viewModel.liftPlan.landingLocation
+                )
                 TextField("Ground bearing capacity", text: $viewModel.liftPlan.groundBearingCapacity)
                 TextField("Wind/weather limit", text: $viewModel.liftPlan.windLimit)
                 TextField("Exclusion zone details", text: $viewModel.liftPlan.exclusionZoneDetails, axis: .vertical)
@@ -440,9 +581,16 @@ private struct LiftPlanStepView: View {
 
 private struct ReviewExportStepView: View {
     @ObservedObject var viewModel: WizardViewModel
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @State private var signerName = ""
     @State private var signerRole = ""
     @State private var signatureData: Data?
+
+    private var signerRoleOptions: [String] {
+        let defaults = ["Safety Officer", "Site Manager", "Project Manager", "Supervisor"]
+        return Array(Set(defaults + libraryViewModel.contactRoleOptions)).sorted()
+    }
 
     var body: some View {
         Form {
@@ -459,11 +607,18 @@ private struct ReviewExportStepView: View {
                 }
                 LabeledContent("Lift plan included", value: viewModel.includeLiftPlan ? "Yes" : "No")
                 LabeledContent("Emergency contact", value: viewModel.ramsDocument.emergencyContact.ifEmpty("-"))
+                LabeledContent("Saved projects", value: "\(libraryViewModel.library.projects.count)")
+                LabeledContent("Saved contacts", value: "\(libraryViewModel.library.contacts.count)")
             }
 
             Section("Digital signatures") {
                 TextField("Signer name", text: $signerName)
-                TextField("Role", text: $signerRole)
+                DropdownTextField(
+                    title: "Role",
+                    placeholder: "Select role",
+                    text: $signerRole,
+                    options: signerRoleOptions
+                )
                 SignaturePadView(signatureImageData: $signatureData)
 
                 Button {
@@ -501,7 +656,7 @@ private struct ReviewExportStepView: View {
                 Button {
                     viewModel.saveToLibraries()
                 } label: {
-                    Label("Save master, RAMS and lift plan to libraries", systemImage: "tray.and.arrow.down")
+                    Label("Save project, contacts, master, RAMS and lift plan", systemImage: "tray.and.arrow.down")
                 }
 
                 Button {
@@ -537,6 +692,14 @@ private struct ReviewExportStepView: View {
                     viewModel.startNewWizard()
                 }
                 .foregroundStyle(.orange)
+            }
+        }
+        .onAppear {
+            if signerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                signerName = sessionViewModel.currentUser?.displayName ?? ""
+            }
+            if signerRole.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                signerRole = "Safety Officer"
             }
         }
     }

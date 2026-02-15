@@ -22,6 +22,8 @@ struct UserHomeView: View {
         libraryViewModel.library.masterDocuments.count
             + libraryViewModel.library.ramsDocuments.count
             + libraryViewModel.library.liftPlans.count
+            + libraryViewModel.library.projects.count
+            + libraryViewModel.library.contacts.count
     }
 
     private var highRiskRamsCount: Int {
@@ -31,6 +33,15 @@ struct UserHomeView: View {
     }
 
     private var recentDocuments: [HomeRecentDocument] {
+        let projects = libraryViewModel.library.projects.map { project in
+            HomeRecentDocument(
+                id: "project-\(project.id.uuidString)",
+                title: nonEmpty(project.name, fallback: "Untitled project"),
+                subtitle: nonEmpty(project.siteAddress, fallback: "No site address"),
+                updatedAt: project.lastUpdatedAt,
+                kind: .project
+            )
+        }
         let masterDocuments = libraryViewModel.library.masterDocuments.map { document in
             HomeRecentDocument(
                 id: "master-\(document.id.uuidString)",
@@ -59,7 +70,7 @@ struct UserHomeView: View {
             )
         }
 
-        return Array((masterDocuments + ramsDocuments + liftPlans).sorted { $0.updatedAt > $1.updatedAt }.prefix(6))
+        return Array((projects + masterDocuments + ramsDocuments + liftPlans).sorted { $0.updatedAt > $1.updatedAt }.prefix(6))
     }
 
     var body: some View {
@@ -70,7 +81,9 @@ struct UserHomeView: View {
 
                     LazyVGrid(columns: metricsColumns, spacing: 12) {
                         HomeMetricCard(title: "Total Saved", value: "\(totalSavedDocuments)", symbolName: "folder.badge.person.crop")
+                        HomeMetricCard(title: "Projects", value: "\(libraryViewModel.library.projects.count)", symbolName: "building.2")
                         HomeMetricCard(title: "RAMS Docs", value: "\(libraryViewModel.library.ramsDocuments.count)", symbolName: "doc.text.magnifyingglass")
+                        HomeMetricCard(title: "Contacts", value: "\(libraryViewModel.library.contacts.count)", symbolName: "person.2")
                         HomeMetricCard(title: "Master Docs", value: "\(libraryViewModel.library.masterDocuments.count)", symbolName: "doc.badge.gearshape")
                         HomeMetricCard(title: "High Risk RAMS", value: "\(highRiskRamsCount)", symbolName: "exclamationmark.triangle")
                     }
@@ -286,12 +299,15 @@ private struct HomeRecentDocument: Identifiable {
 }
 
 private enum HomeDocumentKind {
+    case project
     case master
     case rams
     case liftPlan
 
     var title: String {
         switch self {
+        case .project:
+            return "Project"
         case .master:
             return "Master Document"
         case .rams:
@@ -303,6 +319,8 @@ private enum HomeDocumentKind {
 
     var symbolName: String {
         switch self {
+        case .project:
+            return "building.2"
         case .master:
             return "doc.badge.gearshape"
         case .rams:
@@ -314,6 +332,8 @@ private enum HomeDocumentKind {
 
     var tint: Color {
         switch self {
+        case .project:
+            return .teal
         case .master:
             return .blue
         case .rams:

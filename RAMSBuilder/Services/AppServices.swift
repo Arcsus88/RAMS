@@ -3,44 +3,181 @@ import UIKit
 
 enum AuthError: LocalizedError {
     case invalidCredentials
+    case accountNotFound
+    case emailAlreadyInUse
+    case weakPassword
+    case invalidProfile
 
     var errorDescription: String? {
         switch self {
         case .invalidCredentials:
             return "Please provide a valid email and password."
+        case .accountNotFound:
+            return "No account exists for this email. Register first."
+        case .emailAlreadyInUse:
+            return "An account with this email already exists."
+        case .weakPassword:
+            return "Password must be at least 6 characters."
+        case .invalidProfile:
+            return "Please provide valid first name, last name and email."
         }
     }
 }
 
 protocol AuthServiceProviding {
     func login(email: String, password: String) async throws -> AuthUser
+    func register(firstName: String, lastName: String, email: String, password: String) async throws -> AuthUser
     func logout()
 }
 
 final class MockAuthService: AuthServiceProviding {
     private var activeUser: AuthUser?
+    private let authStore: LocalAuthStore
+
+    init(authStore: LocalAuthStore = LocalAuthStore()) {
+        self.authStore = authStore
+        try? authStore.seedDefaultAccountIfNeeded()
+    }
 
     func login(email: String, password: String) async throws -> AuthUser {
-        try await Task.sleep(nanoseconds: 400_000_000)
+        try await Task.sleep(nanoseconds: 350_000_000)
 
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
         let normalizedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard normalizedEmail.contains("@"), normalizedPassword.count >= 4 else {
+        guard normalizedEmail.contains("@"), normalizedPassword.count >= 1 else {
             throw AuthError.invalidCredentials
         }
 
-        let user = AuthUser(
+        let accounts = try authStore.loadAccounts()
+        guard let account = accounts.first(where: { $0.email == normalizedEmail }) else {
+            throw AuthError.accountNotFound
+        }
+        guard account.password == normalizedPassword else {
+            throw AuthError.invalidCredentials
+        }
+
+        let user = account.authUser
+        activeUser = user
+        return user
+    }
+
+    func register(firstName: String, lastName: String, email: String, password: String) async throws -> AuthUser {
+        try await Task.sleep(nanoseconds: 350_000_000)
+
+        let normalizedFirstName = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedLastName = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !normalizedFirstName.isEmpty, !normalizedLastName.isEmpty, normalizedEmail.contains("@") else {
+            throw AuthError.invalidProfile
+        }
+        guard normalizedPassword.count >= 6 else {
+            throw AuthError.weakPassword
+        }
+
+        var accounts = try authStore.loadAccounts()
+        if accounts.contains(where: { $0.email == normalizedEmail }) {
+            throw AuthError.emailAlreadyInUse
+        }
+
+        let account = LocalAuthAccount(
             id: UUID(),
-            email: normalizedEmail.lowercased(),
-            displayName: normalizedEmail.split(separator: "@").first.map(String.init)?.capitalized ?? "User"
+            email: normalizedEmail,
+            firstName: normalizedFirstName,
+            lastName: normalizedLastName,
+            password: normalizedPassword
         )
+        accounts.append(account)
+        try authStore.saveAccounts(accounts)
+
+        let user = account.authUser
         activeUser = user
         return user
     }
 
     func logout() {
         activeUser = nil
+    }
+}
+
+struct LocalAuthAccount: Codable, Hashable {
+    var id: UUID
+    var email: String
+    var firstName: String
+    var lastName: String
+    var password: String
+
+    var authUser: AuthUser {
+        AuthUser(id: id, email: email, firstName: firstName, lastName: lastName)
+    }
+}
+
+final class LocalAuthStore {
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+    private let authFileName = "accounts.json"
+    private let authDirectoryName = "RAMSBuilderStorage"
+
+    init() {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        self.encoder = encoder
+
+        let decoder = JSONDecoder()
+        self.decoder = decoder
+    }
+
+    func loadAccounts() throws -> [LocalAuthAccount] {
+        let url = try authFileURL()
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return []
+        }
+        let data = try Data(contentsOf: url)
+        return try decoder.decode([LocalAuthAccount].self, from: data)
+    }
+
+    func saveAccounts(_ accounts: [LocalAuthAccount]) throws {
+        let url = try authFileURL()
+        let data = try encoder.encode(accounts)
+        try data.write(to: url, options: .atomic)
+    }
+
+    func seedDefaultAccountIfNeeded() throws {
+        var accounts = try loadAccounts()
+        guard accounts.isEmpty else { return }
+        accounts = [
+            LocalAuthAccount(
+                id: UUID(),
+                email: "demo@probuild.com",
+                firstName: "Demo",
+                lastName: "User",
+                password: "demo123"
+            )
+        ]
+        try saveAccounts(accounts)
+    }
+
+    private func authFileURL() throws -> URL {
+        let fileManager = FileManager.default
+        let root = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directory = root.appendingPathComponent(authDirectoryName, isDirectory: true)
+        if !fileManager.fileExists(atPath: directory.path) {
+            do {
+                try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            } catch {
+                throw LibraryStoreError.failedToCreateDirectory
+            }
+        }
+        return directory.appendingPathComponent(authFileName)
     }
 }
 

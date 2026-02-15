@@ -1,4 +1,5 @@
 import PhotosUI
+import MapKit
 import SwiftUI
 import UIKit
 
@@ -107,6 +108,180 @@ struct MapImagePickerView: View {
                 if let data = try? await newValue.loadTransferable(type: Data.self) {
                     imageData = data
                 }
+            }
+        }
+    }
+}
+
+struct DropdownTextField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    var options: [String]
+
+    private var normalizedOptions: [String] {
+        var seen = Set<String>()
+        var values: [String] = []
+        for option in options {
+            let trimmed = option.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.lowercased()
+            if seen.insert(key).inserted {
+                values.append(trimmed)
+            }
+        }
+        return values
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                TextField(placeholder, text: $text)
+
+                if !normalizedOptions.isEmpty {
+                    Menu {
+                        ForEach(normalizedOptions, id: \.self) { option in
+                            Button(option) {
+                                text = option
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.headline)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+private struct AddressSuggestion: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let subtitle: String
+
+    var displayText: String {
+        subtitle.isEmpty ? title : "\(title), \(subtitle)"
+    }
+}
+
+private final class AddressSearchModel: NSObject, ObservableObject, MKLocalSearchCompleterDelegate {
+    @Published var suggestions: [AddressSuggestion] = []
+
+    private let completer = MKLocalSearchCompleter()
+    private var lastQuery: String = ""
+
+    override init() {
+        super.init()
+        completer.delegate = self
+        completer.resultTypes = [.address]
+    }
+
+    func updateQuery(_ query: String) {
+        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized != lastQuery else { return }
+        lastQuery = normalized
+
+        guard normalized.count >= 4 else {
+            suggestions = []
+            completer.queryFragment = ""
+            return
+        }
+
+        completer.queryFragment = normalized
+    }
+
+    func clear() {
+        suggestions = []
+    }
+
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        let mapped = completer.results.prefix(5).map {
+            AddressSuggestion(title: $0.title, subtitle: $0.subtitle)
+        }
+        DispatchQueue.main.async {
+            self.suggestions = mapped
+        }
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        DispatchQueue.main.async {
+            self.suggestions = []
+        }
+    }
+}
+
+struct AddressAutocompleteField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+
+    @StateObject private var searchModel = AddressSearchModel()
+    @FocusState private var isFocused: Bool
+
+    private var shouldShowSuggestions: Bool {
+        isFocused && !searchModel.suggestions.isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField(placeholder, text: $text)
+                .focused($isFocused)
+                .onChange(of: text) { _, newValue in
+                    searchModel.updateQuery(newValue)
+                }
+
+            if shouldShowSuggestions {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(searchModel.suggestions) { suggestion in
+                        Button {
+                            text = suggestion.displayText
+                            searchModel.clear()
+                            isFocused = false
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(suggestion.title)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                                if !suggestion.subtitle.isEmpty {
+                                    Text(suggestion.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+
+                        if suggestion.id != searchModel.suggestions.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+                .padding(.horizontal, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.15))
+                )
             }
         }
     }
