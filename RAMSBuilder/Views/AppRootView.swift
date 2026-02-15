@@ -20,14 +20,29 @@ struct LoginView: View {
     @Environment(\.openURL) private var openURL
 
     @FocusState private var focusedField: Field?
+    @State private var mode: AuthMode = .login
+    @State private var firstName = ""
+    @State private var lastName = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
     @State private var rememberDevice = true
     @State private var isPasswordVisible = false
+    @State private var isConfirmPasswordVisible = false
+
+    private enum AuthMode: String, CaseIterable, Identifiable {
+        case login = "Sign In"
+        case register = "Register"
+
+        var id: String { rawValue }
+    }
 
     private enum Field {
+        case firstName
+        case lastName
         case email
         case password
+        case confirmPassword
     }
 
     var body: some View {
@@ -41,7 +56,7 @@ struct LoginView: View {
                         loginCard
                         complianceStrip
 
-                        Text("Mock authentication for scaffold stage. Supabase auth can be integrated later.")
+                        Text("Local auth scaffold with registration flow. Supabase auth can be integrated later.")
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.45))
                             .multilineTextAlignment(.center)
@@ -100,18 +115,33 @@ struct LoginView: View {
             CautionStripe()
 
             VStack(alignment: .leading, spacing: 18) {
+                Picker("Access mode", selection: $mode) {
+                    ForEach(AuthMode.allCases) { currentMode in
+                        Text(currentMode.rawValue).tag(currentMode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Portal Access")
+                    Text(mode == .login ? "Portal Access" : "Create Account")
                         .font(.title3.weight(.heavy))
                         .foregroundStyle(.white)
-                    Text("Sign in with your work credentials")
+                    Text(mode == .login ? "Sign in with your work credentials" : "Register a new safety user profile")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.45))
                 }
 
+                if mode == .register {
+                    nameFields
+                }
                 emailField
                 passwordField
-                rememberRow
+
+                if mode == .register {
+                    confirmPasswordField
+                } else {
+                    rememberRow
+                }
 
                 if let errorMessage = sessionViewModel.errorMessage {
                     Text(errorMessage)
@@ -122,10 +152,7 @@ struct LoginView: View {
                 }
 
                 Button {
-                    focusedField = nil
-                    Task {
-                        await sessionViewModel.login(email: email, password: password)
-                    }
+                    submitAuthAction()
                 } label: {
                     HStack(spacing: 8) {
                         if sessionViewModel.isLoading {
@@ -133,7 +160,7 @@ struct LoginView: View {
                                 .controlSize(.small)
                                 .tint(Color.black)
                         }
-                        Text(sessionViewModel.isLoading ? "ACCESSING CLOUD..." : "INITIALIZE SESSION")
+                        Text(actionButtonTitle)
                             .font(.caption.weight(.black))
                             .tracking(2.2)
                     }
@@ -167,18 +194,26 @@ struct LoginView: View {
                 }
                 .padding(.top, 6)
 
-                HStack(spacing: 4) {
-                    Text("New Safety Officer?")
-                        .foregroundStyle(.white.opacity(0.48))
-                    Button("Enroll Here") {
-                        if let url = URL(string: "https://www.probuild.com") {
-                            openURL(url)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 4) {
+                        Text(mode == .login ? "New Safety Officer?" : "Already Registered?")
+                            .foregroundStyle(.white.opacity(0.48))
+                        Button(mode == .login ? "Enroll Here" : "Sign In") {
+                            mode = mode == .login ? .register : .login
+                            sessionViewModel.errorMessage = nil
+                            focusedField = nil
                         }
+                        .foregroundStyle(Color.proYellow)
+                        .fontWeight(.bold)
                     }
-                    .foregroundStyle(Color.proYellow)
-                    .fontWeight(.bold)
+                    .font(.caption)
+
+                    if mode == .login {
+                        Text("Demo login: demo@probuild.com / demo123")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
                 }
-                .font(.caption)
                 .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 22)
@@ -195,6 +230,25 @@ struct LoginView: View {
                 .stroke(Color.proYellow.opacity(0.22), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.65), radius: 30, y: 18)
+    }
+
+    private var nameFields: some View {
+        HStack(spacing: 10) {
+            labeledCompactField(
+                title: "FIRST NAME",
+                placeholder: "Jane",
+                symbol: "person.fill",
+                text: $firstName,
+                field: .firstName
+            )
+            labeledCompactField(
+                title: "LAST NAME",
+                placeholder: "Doe",
+                symbol: "person.fill",
+                text: $lastName,
+                field: .lastName
+            )
+        }
     }
 
     private var emailField: some View {
@@ -216,7 +270,7 @@ struct LoginView: View {
                     .focused($focusedField, equals: .email)
                     .submitLabel(.next)
                     .onSubmit {
-                        focusedField = .password
+                        focusedField = mode == .register ? .password : .password
                     }
                     .foregroundStyle(.white)
             }
@@ -265,9 +319,10 @@ struct LoginView: View {
                 .autocorrectionDisabled()
                 .submitLabel(.go)
                 .onSubmit {
-                    focusedField = nil
-                    Task {
-                        await sessionViewModel.login(email: email, password: password)
+                    if mode == .register {
+                        focusedField = .confirmPassword
+                    } else {
+                        submitAuthAction()
                     }
                 }
                 .foregroundStyle(.white)
@@ -287,6 +342,88 @@ struct LoginView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .stroke(borderColor(for: .password), lineWidth: 1)
+            )
+        }
+    }
+
+    private var confirmPasswordField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("CONFIRM PASSWORD")
+                .font(.system(size: 10, weight: .black))
+                .tracking(1.8)
+                .foregroundStyle(.white.opacity(0.45))
+
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.shield.fill")
+                    .foregroundStyle(iconColor(for: .confirmPassword))
+                    .frame(width: 18)
+
+                Group {
+                    if isConfirmPasswordVisible {
+                        TextField("••••••••", text: $confirmPassword)
+                    } else {
+                        SecureField("••••••••", text: $confirmPassword)
+                    }
+                }
+                .focused($focusedField, equals: .confirmPassword)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                .onSubmit {
+                    submitAuthAction()
+                }
+                .foregroundStyle(.white)
+
+                Button {
+                    isConfirmPasswordVisible.toggle()
+                } label: {
+                    Image(systemName: isConfirmPasswordVisible ? "eye.fill" : "eye.slash.fill")
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(Color.black.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(borderColor(for: .confirmPassword), lineWidth: 1)
+            )
+        }
+    }
+
+    private func labeledCompactField(
+        title: String,
+        placeholder: String,
+        symbol: String,
+        text: Binding<String>,
+        field: Field
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 10, weight: .black))
+                .tracking(1.8)
+                .foregroundStyle(.white.opacity(0.45))
+
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .foregroundStyle(iconColor(for: field))
+                    .frame(width: 18)
+                TextField(placeholder, text: text)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .focused($focusedField, equals: field)
+                    .submitLabel(.next)
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(Color.black.opacity(0.45))
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(borderColor(for: field), lineWidth: 1)
             )
         }
     }
@@ -323,6 +460,30 @@ struct LoginView: View {
 
     private func borderColor(for field: Field) -> Color {
         focusedField == field ? Color.proYellow.opacity(0.5) : Color.white.opacity(0.12)
+    }
+
+    private var actionButtonTitle: String {
+        if sessionViewModel.isLoading {
+            return mode == .login ? "ACCESSING CLOUD..." : "CREATING PROFILE..."
+        }
+        return mode == .login ? "INITIALIZE SESSION" : "REGISTER PROFILE"
+    }
+
+    private func submitAuthAction() {
+        focusedField = nil
+        Task {
+            if mode == .login {
+                await sessionViewModel.login(email: email, password: password)
+            } else {
+                await sessionViewModel.register(
+                    firstName: firstName,
+                    lastName: lastName,
+                    email: email,
+                    password: password,
+                    confirmPassword: confirmPassword
+                )
+            }
+        }
     }
 }
 
@@ -407,7 +568,10 @@ struct DashboardView: View {
             }
             .tag(DashboardTab.home)
 
-            WizardHostView(libraryViewModel: libraryViewModel)
+            WizardHostView(
+                libraryViewModel: libraryViewModel,
+                sessionViewModel: sessionViewModel
+            )
                 .tabItem {
                     Label("Wizard", systemImage: "wand.and.stars")
                 }
@@ -437,10 +601,22 @@ struct DashboardView: View {
             List {
                 Section("Signed in") {
                     Text(sessionViewModel.currentUser?.email ?? "-")
+                    Text("First name: \(sessionViewModel.currentUser?.firstName ?? "-")")
+                    Text("Last name: \(sessionViewModel.currentUser?.lastName ?? "-")")
                     Text(sessionViewModel.currentUser?.displayName ?? "-")
                 }
 
                 Section("Local library snapshot") {
+                    HStack {
+                        Text("Projects")
+                        Spacer()
+                        Text("\(libraryViewModel.library.projects.count)")
+                    }
+                    HStack {
+                        Text("Contacts")
+                        Spacer()
+                        Text("\(libraryViewModel.library.contacts.count)")
+                    }
                     HStack {
                         Text("Hazards")
                         Spacer()
@@ -485,16 +661,27 @@ struct DashboardView: View {
 
 private struct WizardHostView: View {
     @ObservedObject var libraryViewModel: LibraryViewModel
+    @ObservedObject var sessionViewModel: SessionViewModel
     @StateObject private var wizardViewModel: WizardViewModel
 
-    init(libraryViewModel: LibraryViewModel) {
+    init(
+        libraryViewModel: LibraryViewModel,
+        sessionViewModel: SessionViewModel
+    ) {
         self.libraryViewModel = libraryViewModel
+        self.sessionViewModel = sessionViewModel
         _wizardViewModel = StateObject(
-            wrappedValue: WizardViewModel(libraryViewModel: libraryViewModel)
+            wrappedValue: WizardViewModel(
+                libraryViewModel: libraryViewModel,
+                userProvider: { sessionViewModel.currentUser }
+            )
         )
     }
 
     var body: some View {
         WizardFlowView(viewModel: wizardViewModel)
+            .onAppear {
+                wizardViewModel.applyCurrentUserDefaults()
+            }
     }
 }
