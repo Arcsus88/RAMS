@@ -203,7 +203,7 @@ private struct RamsDocumentStepView: View {
             Section("Method statement") {
                 ForEach($viewModel.ramsDocument.methodStatements) { $statement in
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Step \(statement.sequence.wrappedValue)")
+                        Text("Step \(statement.sequence)")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                         TextField("Step title", text: $statement.title)
@@ -292,9 +292,9 @@ private struct RamsDocumentStepView: View {
                                 .foregroundStyle(.secondary)
                             TextEditor(
                                 text: Binding(
-                                    get: { risk.controlMeasures.wrappedValue.joined(separator: "\n") },
+                                    get: { risk.controlMeasures.joined(separator: "\n") },
                                     set: { newValue in
-                                        risk.controlMeasures.wrappedValue = newValue
+                                        $risk.controlMeasures.wrappedValue = newValue
                                             .split(separator: "\n")
                                             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                                             .filter { !$0.isEmpty }
@@ -309,33 +309,33 @@ private struct RamsDocumentStepView: View {
                                 Text("Initial L")
                                 Stepper("", value: $risk.initialLikelihood, in: 1...5)
                                     .labelsHidden()
-                                Text("\(risk.initialLikelihood.wrappedValue)")
+                                Text("\(risk.initialLikelihood)")
                             }
                             GridRow {
                                 Text("Initial S")
                                 Stepper("", value: $risk.initialSeverity, in: 1...5)
                                     .labelsHidden()
-                                Text("\(risk.initialSeverity.wrappedValue)")
+                                Text("\(risk.initialSeverity)")
                             }
                             GridRow {
                                 Text("Residual L")
                                 Stepper("", value: $risk.residualLikelihood, in: 1...5)
                                     .labelsHidden()
-                                Text("\(risk.residualLikelihood.wrappedValue)")
+                                Text("\(risk.residualLikelihood)")
                             }
                             GridRow {
                                 Text("Residual S")
                                 Stepper("", value: $risk.residualSeverity, in: 1...5)
                                     .labelsHidden()
-                                Text("\(risk.residualSeverity.wrappedValue)")
+                                Text("\(risk.residualSeverity)")
                             }
                         }
 
                         HStack {
-                            Text("Initial score: \(risk.wrappedValue.initialScore)")
-                            Text("Residual score: \(risk.wrappedValue.residualScore)")
+                            Text("Initial score: \(risk.initialScore)")
+                            Text("Residual score: \(risk.residualScore)")
                             Spacer()
-                            RiskReviewBadge(review: risk.wrappedValue.overallReview)
+                            RiskReviewBadge(review: risk.overallReview)
                         }
                         .font(.caption)
                     }

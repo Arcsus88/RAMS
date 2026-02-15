@@ -192,7 +192,7 @@ struct SignaturePadView: View {
 
                 Text(signatureImageData == nil ? "Not saved" : "Ready")
                     .font(.caption)
-                    .foregroundStyle(signatureImageData == nil ? .secondary : .green)
+                    .foregroundColor(signatureImageData == nil ? .secondary : .green)
             }
         }
     }

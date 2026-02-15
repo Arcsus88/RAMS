@@ -73,22 +73,22 @@ This repository does **not** commit a `.xcodeproj`; it is generated from `projec
 
 ## Architecture summary
 
-- `App/Models/DomainModels.swift`
+- `RAMSBuilder/Models/DomainModels.swift`
   - Master Document, RAMS, Hazard templates, Risk assessments, Lift plans, Signatures.
-- `App/Models/DocumentAndRAMSSchema.swift`
+- `RAMSBuilder/Models/DocumentAndRAMSSchema.swift`
   - Contract-style schema models for Master Document, Master Cover Config, Master Template, RAMS, and Hazard.
   - Includes explicit field constraint validation (required fields, min/max lengths, array limits, URL checks, and bounded integers).
-- `App/Services/AppServices.swift`
+- `RAMSBuilder/Services/AppServices.swift`
   - `MockAuthService`
   - `LibraryStore` (JSON storage in Application Support)
   - `PublicLinkService` (placeholder URL generator)
   - `PDFExportService` (entry point/wrapper around print engine)
-- `App/Services/PDFPrintingEngine.swift`
+- `RAMSBuilder/Services/PDFPrintingEngine.swift`
   - `RamsPDFPrintEngine` (fixed A4 shell, pagination and rendering)
   - `RamsPDFDocumentBuilder` (maps master/RAMS/lift/signatures into printable sections)
-- `App/ViewModels/AppViewModels.swift`
+- `RAMSBuilder/ViewModels/AppViewModels.swift`
   - Session, library, and wizard orchestration logic.
-- `App/Views/*`
+- `RAMSBuilder/Views/*`
   - Login, dashboard tabs, wizard steps, and reusable UI components.
 
 ---
@@ -97,7 +97,7 @@ This repository does **not** commit a `.xcodeproj`; it is generated from `projec
 
 The repository now includes a dedicated schema layer in:
 
-- `App/Models/DocumentAndRAMSSchema.swift`
+- `RAMSBuilder/Models/DocumentAndRAMSSchema.swift`
 
 This is intentionally separate from the UI-oriented domain models used by the wizard so that API contract validation can evolve without breaking scaffolding UX.
 
@@ -172,8 +172,8 @@ The print engine uses a deterministic A4 pipeline inspired by DOM-prepagination 
 
 Brand profile values are centralized in:
 
-- `App/Services/PDFBrandTheme.swift`
-- `App/Views/Components.swift` color palette (`proSlate*`, `proYellow`) for UI styling
+- `RAMSBuilder/Services/PDFBrandTheme.swift`
+- `RAMSBuilder/Views/Components.swift` color palette (`proSlate*`, `proYellow`) for UI styling
 
 You can customize:
 

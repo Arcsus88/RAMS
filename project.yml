@@ -3,18 +3,22 @@ options:
   minimumXcodeGenVersion: 2.38.0
 settings:
   base:
-    SWIFT_VERSION: 5.10
+    SWIFT_VERSION: "5.10"
 targets:
   RAMSBuilder:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - App
+      - RAMSBuilder
     settings:
       base:
+        SWIFT_VERSION: "5.10"
         PRODUCT_BUNDLE_IDENTIFIER: com.example.ramsbuilder
         PRODUCT_NAME: RAMSBuilder
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: U289P8FASL
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: RAMSBuilder
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
@@ -29,6 +33,9 @@ targets:
     platform: iOS
     deploymentTarget: "17.0"
     sources:
-      - Tests
+      - RAMSBuilderTests
+    settings:
+      base:
+        SWIFT_VERSION: "5.10"
     dependencies:
       - target: RAMSBuilder

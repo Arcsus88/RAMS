@@ -458,7 +458,7 @@ final class RamsPDFPrintEngine {
             return nil
         }
 
-        var headChildren = [splitFirst.head]
+        let headChildren = [splitFirst.head]
         var tailChildren = [splitFirst.tail]
         tailChildren.append(contentsOf: children.dropFirst())
 
@@ -1857,7 +1857,7 @@ enum RamsPDFDocumentBuilder {
         let registerRows = rams.riskAssessments.map { risk in
             let controls = risk.controlMeasures.isEmpty ? "-" : risk.controlMeasures.joined(separator: "; ")
             let matrix = "\(risk.initialLikelihood)x\(risk.initialSeverity)=\(risk.initialScore) | R:\(risk.residualScore) \(risk.overallReview.rawValue)"
-            [
+            return [
                 risk.hazardTitle.ifBlank("-"),
                 matrix,
                 controls
