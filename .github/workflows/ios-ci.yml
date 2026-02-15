@@ -35,7 +35,7 @@ jobs:
               -project RAMSBuilder.xcodeproj \
               -scheme RAMSBuilder \
               -showdestinations \
-            | awk -F'id:' '/platform:iOS Simulator/ { split($2, a, ","); gsub(/[[:space:]]/, "", a[1]); print a[1]; exit }'
+            | awk -F'id:' '/platform:iOS Simulator/ && $0 !~ /placeholder/ { split($2, a, ","); gsub(/[[:space:]]/, "", a[1]); print a[1]; exit }'
           )"
 
           if [[ -z "${destination_id}" ]]; then
