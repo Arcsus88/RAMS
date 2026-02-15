@@ -1218,7 +1218,7 @@ private extension String {
     }
 }
 
-private extension String? {
+private extension Optional where Wrapped == String {
     var rams_displayValue: String {
         guard let value = self?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return "-"
@@ -1227,7 +1227,7 @@ private extension String? {
     }
 }
 
-private extension Bool? {
+private extension Optional where Wrapped == Bool {
     var rams_yesNoOrDash: String {
         guard let value = self else { return "-" }
         return value ? "Yes" : "No"
