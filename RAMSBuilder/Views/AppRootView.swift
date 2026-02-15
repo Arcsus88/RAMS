@@ -270,7 +270,7 @@ struct LoginView: View {
                     .focused($focusedField, equals: .email)
                     .submitLabel(.next)
                     .onSubmit {
-                        focusedField = mode == .register ? .password : .password
+                        focusedField = .password
                     }
                     .foregroundStyle(.white)
             }
