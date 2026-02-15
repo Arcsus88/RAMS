@@ -383,27 +383,48 @@ private struct CautionStripe: View {
     }
 }
 
+private enum DashboardTab: Hashable {
+    case home
+    case wizard
+    case libraries
+    case account
+}
+
 struct DashboardView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
+    @State private var selectedTab: DashboardTab = .home
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
+            UserHomeView(
+                onOpenWizard: { selectedTab = .wizard },
+                onOpenLibraries: { selectedTab = .libraries },
+                onOpenAccount: { selectedTab = .account }
+            )
+            .tabItem {
+                Label("Home", systemImage: "house.fill")
+            }
+            .tag(DashboardTab.home)
+
             WizardHostView(libraryViewModel: libraryViewModel)
                 .tabItem {
                     Label("Wizard", systemImage: "wand.and.stars")
                 }
+                .tag(DashboardTab.wizard)
 
             LibrariesHomeView()
                 .environmentObject(libraryViewModel)
                 .tabItem {
                     Label("Libraries", systemImage: "books.vertical")
                 }
+                .tag(DashboardTab.libraries)
 
             accountView
                 .tabItem {
                     Label("Account", systemImage: "person.circle")
                 }
+                .tag(DashboardTab.account)
         }
         .tint(.proYellow)
         .task {
