@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		11C9B1D44EBD4A5DA31C0001 /* RAMSPDFLayoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C9B1D44EBD4A5DA31C1001 /* RAMSPDFLayoutModels.swift */; };
+		11C9B1D44EBD4A5DA31C0002 /* RAMSPDFLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C9B1D44EBD4A5DA31C1002 /* RAMSPDFLayoutView.swift */; };
 		0D6865D432DF0FD826E333E7 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977943889421EBB2B677B134 /* AppRootView.swift */; };
 		16A3A20F35AA885314CE61A9 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC01D41423BE270C62870755 /* Components.swift */; };
 		19552BE3E70DDAF01E9B7424 /* WizardViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A8D913F13D52218CE8194B /* WizardViews.swift */; };
@@ -34,6 +36,8 @@
 
 /* Begin PBXFileReference section */
 		0BF5B127F566DBC0DA8FFB8E /* DocumentAndRAMSSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentAndRAMSSchema.swift; sourceTree = "<group>"; };
+		11C9B1D44EBD4A5DA31C1001 /* RAMSPDFLayoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAMSPDFLayoutModels.swift; sourceTree = "<group>"; };
+		11C9B1D44EBD4A5DA31C1002 /* RAMSPDFLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAMSPDFLayoutView.swift; sourceTree = "<group>"; };
 		206642F23A231A4F9FE9199C /* RiskScoringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskScoringTests.swift; sourceTree = "<group>"; };
 		38DA93C59CC3C0854F1B3602 /* DocumentAndRAMSSchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentAndRAMSSchemaTests.swift; sourceTree = "<group>"; };
 		6D8CF91A07E4F8A258295C0D /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
@@ -77,6 +81,7 @@
 			children = (
 				0BF5B127F566DBC0DA8FFB8E /* DocumentAndRAMSSchema.swift */,
 				C8CEDC9D46C200CF0CF579D2 /* DomainModels.swift */,
+				11C9B1D44EBD4A5DA31C1001 /* RAMSPDFLayoutModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -96,6 +101,7 @@
 				977943889421EBB2B677B134 /* AppRootView.swift */,
 				BC01D41423BE270C62870755 /* Components.swift */,
 				E3C2A7CFF91600DD6FF98AE6 /* LibraryViews.swift */,
+				11C9B1D44EBD4A5DA31C1002 /* RAMSPDFLayoutView.swift */,
 				D3A8D913F13D52218CE8194B /* WizardViews.swift */,
 			);
 			path = Views;
@@ -214,6 +220,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11C9B1D44EBD4A5DA31C0001 /* RAMSPDFLayoutModels.swift in Sources */,
+				11C9B1D44EBD4A5DA31C0002 /* RAMSPDFLayoutView.swift in Sources */,
 				0D6865D432DF0FD826E333E7 /* AppRootView.swift in Sources */,
 				7A6ABBCF7E72029E90F59891 /* AppServices.swift in Sources */,
 				A09E8032D4A0E6B797F38D9F /* AppViewModels.swift in Sources */,
