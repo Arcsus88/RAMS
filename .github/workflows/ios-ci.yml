@@ -1,0 +1,54 @@
+name: iOS CI
+
+on:
+  push:
+    branches:
+      - main
+      - cursor/**
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  unit-tests:
+    name: Build and Test (iOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: xcodegen generate
+
+      - name: Resolve simulator destination
+        id: destination
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination_id="$(
+            xcrun simctl list devices available \
+              | awk '/iPhone/ { if (match($0, /[0-9A-F-]{36}/)) { print substr($0, RSTART, RLENGTH); exit } }'
+          )"
+
+          if [[ -z "${destination_id}" ]]; then
+            echo "No iOS simulator destination found."
+            exit 1
+          fi
+
+          echo "Selected simulator id: ${destination_id}"
+          echo "destination=id=${destination_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project RAMSBuilder.xcodeproj \
+            -scheme RAMSBuilder \
+            -destination "${{ steps.destination.outputs.destination }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO
