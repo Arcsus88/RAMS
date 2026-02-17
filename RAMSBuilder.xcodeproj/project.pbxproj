@@ -7,19 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		11C9B1D44EBD4A5DA31C0001 /* RAMSPDFLayoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C9B1D44EBD4A5DA31C1001 /* RAMSPDFLayoutModels.swift */; };
-		11C9B1D44EBD4A5DA31C0002 /* RAMSPDFLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C9B1D44EBD4A5DA31C1002 /* RAMSPDFLayoutView.swift */; };
 		0D6865D432DF0FD826E333E7 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 977943889421EBB2B677B134 /* AppRootView.swift */; };
 		16A3A20F35AA885314CE61A9 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC01D41423BE270C62870755 /* Components.swift */; };
 		19552BE3E70DDAF01E9B7424 /* WizardViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A8D913F13D52218CE8194B /* WizardViews.swift */; };
+		3B04654A92E60C948DDA7937 /* WizardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C1BF97513FC33FBF91258CC /* WizardViewModelTests.swift */; };
 		4972EDBD0F458C4A0C66BDCA /* RAMSBuilderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC90ACE4339CEDCA08084EE2 /* RAMSBuilderApp.swift */; };
+		5327020F2367DE31EE85BEDC /* PublicLinkServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C693771A56EF0F5E85206F /* PublicLinkServiceTests.swift */; };
 		7594974B550EDDC6FD6EDBFE /* DomainModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CEDC9D46C200CF0CF579D2 /* DomainModels.swift */; };
+		7690D53D2725FC0DDEC6C54F /* RAMSPDFLayoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9044D274403A993E4A0EF98D /* RAMSPDFLayoutModels.swift */; };
 		7A6ABBCF7E72029E90F59891 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D8CF91A07E4F8A258295C0D /* AppServices.swift */; };
 		98784545F6E8DF7CFBCB0FF7 /* LibraryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C2A7CFF91600DD6FF98AE6 /* LibraryViews.swift */; };
 		99D540E60D0EDDE8DC28ECA7 /* PDFPrintingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A6428921BA9BEF750A406A /* PDFPrintingEngine.swift */; };
 		A09E8032D4A0E6B797F38D9F /* AppViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D7C8F0AE01AF8F3F53D5A1 /* AppViewModels.swift */; };
 		B7BC38A649CF4238942C851B /* DocumentAndRAMSSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF5B127F566DBC0DA8FFB8E /* DocumentAndRAMSSchema.swift */; };
 		CFF3747BA68FA879D6E314BE /* DocumentAndRAMSSchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38DA93C59CC3C0854F1B3602 /* DocumentAndRAMSSchemaTests.swift */; };
+		D3270A32934FD5E96353B026 /* RAMSPDFLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16BA8D5CD5DD52FCB94D9D6 /* RAMSPDFLayoutView.swift */; };
 		DD98367DCA55DA407AC1652D /* RiskScoringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 206642F23A231A4F9FE9199C /* RiskScoringTests.swift */; };
 		E9E233789D086EFAA080A2EA /* PDFBrandTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 874B09A021694A16AF7F9F6E /* PDFBrandTheme.swift */; };
 /* End PBXBuildFile section */
@@ -36,17 +38,19 @@
 
 /* Begin PBXFileReference section */
 		0BF5B127F566DBC0DA8FFB8E /* DocumentAndRAMSSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentAndRAMSSchema.swift; sourceTree = "<group>"; };
-		11C9B1D44EBD4A5DA31C1001 /* RAMSPDFLayoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAMSPDFLayoutModels.swift; sourceTree = "<group>"; };
-		11C9B1D44EBD4A5DA31C1002 /* RAMSPDFLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAMSPDFLayoutView.swift; sourceTree = "<group>"; };
 		206642F23A231A4F9FE9199C /* RiskScoringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiskScoringTests.swift; sourceTree = "<group>"; };
 		38DA93C59CC3C0854F1B3602 /* DocumentAndRAMSSchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentAndRAMSSchemaTests.swift; sourceTree = "<group>"; };
+		4C1BF97513FC33FBF91258CC /* WizardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardViewModelTests.swift; sourceTree = "<group>"; };
+		63C693771A56EF0F5E85206F /* PublicLinkServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicLinkServiceTests.swift; sourceTree = "<group>"; };
 		6D8CF91A07E4F8A258295C0D /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		82A6428921BA9BEF750A406A /* PDFPrintingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFPrintingEngine.swift; sourceTree = "<group>"; };
 		874B09A021694A16AF7F9F6E /* PDFBrandTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFBrandTheme.swift; sourceTree = "<group>"; };
 		89D7C8F0AE01AF8F3F53D5A1 /* AppViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModels.swift; sourceTree = "<group>"; };
+		9044D274403A993E4A0EF98D /* RAMSPDFLayoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAMSPDFLayoutModels.swift; sourceTree = "<group>"; };
 		977943889421EBB2B677B134 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
 		9C7E85E707EE19B31A029DD4 /* RAMSBuilder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RAMSBuilder.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9CC491C3EFD2089DFCFD234A /* RAMSBuilderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RAMSBuilderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B16BA8D5CD5DD52FCB94D9D6 /* RAMSPDFLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAMSPDFLayoutView.swift; sourceTree = "<group>"; };
 		BC01D41423BE270C62870755 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		C8CEDC9D46C200CF0CF579D2 /* DomainModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainModels.swift; sourceTree = "<group>"; };
 		D3A8D913F13D52218CE8194B /* WizardViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardViews.swift; sourceTree = "<group>"; };
@@ -81,7 +85,7 @@
 			children = (
 				0BF5B127F566DBC0DA8FFB8E /* DocumentAndRAMSSchema.swift */,
 				C8CEDC9D46C200CF0CF579D2 /* DomainModels.swift */,
-				11C9B1D44EBD4A5DA31C1001 /* RAMSPDFLayoutModels.swift */,
+				9044D274403A993E4A0EF98D /* RAMSPDFLayoutModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -101,7 +105,7 @@
 				977943889421EBB2B677B134 /* AppRootView.swift */,
 				BC01D41423BE270C62870755 /* Components.swift */,
 				E3C2A7CFF91600DD6FF98AE6 /* LibraryViews.swift */,
-				11C9B1D44EBD4A5DA31C1002 /* RAMSPDFLayoutView.swift */,
+				B16BA8D5CD5DD52FCB94D9D6 /* RAMSPDFLayoutView.swift */,
 				D3A8D913F13D52218CE8194B /* WizardViews.swift */,
 			);
 			path = Views;
@@ -111,7 +115,9 @@
 			isa = PBXGroup;
 			children = (
 				38DA93C59CC3C0854F1B3602 /* DocumentAndRAMSSchemaTests.swift */,
+				63C693771A56EF0F5E85206F /* PublicLinkServiceTests.swift */,
 				206642F23A231A4F9FE9199C /* RiskScoringTests.swift */,
+				4C1BF97513FC33FBF91258CC /* WizardViewModelTests.swift */,
 			);
 			path = RAMSBuilderTests;
 			sourceTree = "<group>";
@@ -212,7 +218,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				CFF3747BA68FA879D6E314BE /* DocumentAndRAMSSchemaTests.swift in Sources */,
+				5327020F2367DE31EE85BEDC /* PublicLinkServiceTests.swift in Sources */,
 				DD98367DCA55DA407AC1652D /* RiskScoringTests.swift in Sources */,
+				3B04654A92E60C948DDA7937 /* WizardViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -220,8 +228,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				11C9B1D44EBD4A5DA31C0001 /* RAMSPDFLayoutModels.swift in Sources */,
-				11C9B1D44EBD4A5DA31C0002 /* RAMSPDFLayoutView.swift in Sources */,
 				0D6865D432DF0FD826E333E7 /* AppRootView.swift in Sources */,
 				7A6ABBCF7E72029E90F59891 /* AppServices.swift in Sources */,
 				A09E8032D4A0E6B797F38D9F /* AppViewModels.swift in Sources */,
@@ -232,6 +238,8 @@
 				E9E233789D086EFAA080A2EA /* PDFBrandTheme.swift in Sources */,
 				99D540E60D0EDDE8DC28ECA7 /* PDFPrintingEngine.swift in Sources */,
 				4972EDBD0F458C4A0C66BDCA /* RAMSBuilderApp.swift in Sources */,
+				7690D53D2725FC0DDEC6C54F /* RAMSPDFLayoutModels.swift in Sources */,
+				D3270A32934FD5E96353B026 /* RAMSPDFLayoutView.swift in Sources */,
 				19552BE3E70DDAF01E9B7424 /* WizardViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -251,7 +259,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -333,7 +340,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";

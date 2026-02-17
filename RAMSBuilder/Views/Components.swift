@@ -6,7 +6,75 @@ extension Color {
     static let proSlate900 = Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255)
     static let proSlate800 = Color(red: 30 / 255, green: 41 / 255, blue: 59 / 255)
     static let proSlate100 = Color(red: 241 / 255, green: 245 / 255, blue: 249 / 255)
+    static let proSlate050 = Color(red: 248 / 255, green: 250 / 255, blue: 252 / 255)
     static let proYellow = Color(red: 250 / 255, green: 204 / 255, blue: 21 / 255)
+    static let proTeal = Color(red: 20 / 255, green: 184 / 255, blue: 166 / 255)
+}
+
+extension View {
+    func proCard(padding: CGFloat = 16) -> some View {
+        self
+            .padding(padding)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.proSlate100, lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.04), radius: 8, y: 3)
+    }
+}
+
+struct ProPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline.weight(.bold))
+            .foregroundStyle(Color.proSlate900)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .frame(minHeight: 44)
+            .background(isEnabled ? Color.proYellow : Color.proSlate100)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+struct ProSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(isEnabled ? Color.proSlate800 : Color.secondary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .frame(minHeight: 44)
+            .background(Color.secondary.opacity(configuration.isPressed ? 0.18 : 0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+struct ProStatPill: View {
+    let title: String
+    let value: String
+    var tint: Color = .proYellow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.heavy))
+                .foregroundStyle(Color.proSlate900)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.18))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
 }
 
 struct RiskReviewBadge: View {

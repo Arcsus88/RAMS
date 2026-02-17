@@ -83,6 +83,43 @@ final class LibraryViewModel: ObservableObject {
         persist()
     }
 
+    func saveClient(_ client: ClientRecord) {
+        upsert(client, in: &library.clients)
+        persist()
+    }
+
+    func saveProject(_ project: ProjectRecord) {
+        upsert(project, in: &library.projects)
+        persist()
+    }
+
+    func deleteClient(id: UUID) {
+        guard let clientIndex = library.clients.firstIndex(where: { $0.id == id }) else { return }
+        library.clients.remove(at: clientIndex)
+
+        for index in library.projects.indices where library.projects[index].clientID == id {
+            library.projects[index].clientID = nil
+            library.projects[index].updatedAt = Date()
+        }
+
+        for index in library.masterDocuments.indices where library.masterDocuments[index].clientID == id {
+            library.masterDocuments[index].clientID = nil
+        }
+
+        persist()
+    }
+
+    func deleteProject(id: UUID) {
+        guard let projectIndex = library.projects.firstIndex(where: { $0.id == id }) else { return }
+        library.projects.remove(at: projectIndex)
+
+        for index in library.masterDocuments.indices where library.masterDocuments[index].projectID == id {
+            library.masterDocuments[index].projectID = nil
+        }
+
+        persist()
+    }
+
     private func persist() {
         do {
             try store.saveLibrary(library)
@@ -101,7 +138,7 @@ final class LibraryViewModel: ObservableObject {
 }
 
 enum WizardStep: String, CaseIterable, Identifiable {
-    case masterDocument = "Master Document"
+    case masterDocument = "Project & Site Setup"
     case ramsDocument = "RAMS & Method Statement"
     case liftPlan = "Lift Plan"
     case review = "Review & Export"
@@ -156,6 +193,33 @@ final class WizardViewModel: ObservableObject {
         return Double(stepIndex) / Double(orderedSteps.count - 1)
     }
 
+    var availableClients: [ClientRecord] {
+        libraryViewModel.library.clients.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    var availableProjects: [ProjectRecord] {
+        libraryViewModel.library.projects.sorted {
+            $0.updatedAt > $1.updatedAt
+        }
+    }
+
+    var availableProjectsForSelectedClient: [ProjectRecord] {
+        guard let clientID = masterDocument.clientID else { return [] }
+        return availableProjects.filter { $0.clientID == clientID }
+    }
+
+    var selectedClient: ClientRecord? {
+        guard let clientID = masterDocument.clientID else { return nil }
+        return libraryViewModel.library.clients.first(where: { $0.id == clientID })
+    }
+
+    var selectedProject: ProjectRecord? {
+        guard let projectID = masterDocument.projectID else { return nil }
+        return libraryViewModel.library.projects.first(where: { $0.id == projectID })
+    }
+
     var canGoBack: Bool {
         stepIndex > 0
     }
@@ -175,6 +239,11 @@ final class WizardViewModel: ObservableObject {
     func goNext() {
         errorMessage = nil
         guard validateCurrentStep() else { return }
+
+        if currentStep == .masterDocument {
+            ensureProjectContextForWizard()
+        }
+
         guard stepIndex + 1 < orderedSteps.count else {
             return
         }
@@ -197,8 +266,32 @@ final class WizardViewModel: ObservableObject {
         ramsDocument.riskAssessments.append(template.makeAssessment())
     }
 
+    func addRisks(from templates: [HazardTemplate]) {
+        ramsDocument.riskAssessments.append(contentsOf: templates.map { $0.makeAssessment() })
+    }
+
     func addBlankRisk() {
         ramsDocument.riskAssessments.append(RiskAssessment())
+    }
+
+    func populatePreparedByIfNeeded(with userName: String) {
+        let cleanUserName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanUserName.isEmpty else { return }
+        guard ramsDocument.preparedBy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        ramsDocument.preparedBy = cleanUserName
+    }
+
+    func quickAddApprovedByForSamePerson(loggedInUserName: String) {
+        let preparedBy = ramsDocument.preparedBy.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !preparedBy.isEmpty {
+            ramsDocument.approvedBy = preparedBy
+            return
+        }
+
+        let cleanUserName = loggedInUserName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanUserName.isEmpty else { return }
+        ramsDocument.preparedBy = cleanUserName
+        ramsDocument.approvedBy = cleanUserName
     }
 
     func removeRisks(at offsets: IndexSet) {
@@ -226,6 +319,169 @@ final class WizardViewModel: ObservableObject {
             signatureImageData: signatureImageData
         )
         ramsDocument.signatureTable.append(record)
+    }
+
+    func selectClient(id: UUID?) {
+        errorMessage = nil
+        masterDocument.clientID = id
+        if let id, let client = libraryViewModel.library.clients.first(where: { $0.id == id }) {
+            masterDocument.clientName = client.name
+        } else if id == nil {
+            masterDocument.clientName = ""
+            masterDocument.projectID = nil
+        }
+
+        if let selectedProjectID = masterDocument.projectID,
+           let selectedProject = libraryViewModel.library.projects.first(where: { $0.id == selectedProjectID }),
+           let projectClientID = selectedProject.clientID,
+           let selectedClientID = id,
+           projectClientID != selectedClientID {
+            masterDocument.projectID = nil
+        }
+    }
+
+    func selectProject(id: UUID?) {
+        errorMessage = nil
+        masterDocument.projectID = id
+        guard let id,
+              let project = libraryViewModel.library.projects.first(where: { $0.id == id }) else {
+            return
+        }
+
+        masterDocument.projectName = project.name
+        masterDocument.siteAddress = project.siteAddress
+        if !project.principalContractor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.principalContractor = project.principalContractor
+        }
+        if !project.emergencyContactName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.emergencyContactName = project.emergencyContactName
+        }
+        if !project.emergencyContactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.emergencyContactPhone = project.emergencyContactPhone
+        }
+        if !project.nearestHospitalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.nearestHospitalName = project.nearestHospitalName
+        }
+        if !project.nearestHospitalAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.nearestHospitalAddress = project.nearestHospitalAddress
+        }
+        if !project.hospitalDirections.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            masterDocument.hospitalDirections = project.hospitalDirections
+        }
+        masterDocument.keyContacts = project.keyContacts.isEmpty ? [KeyContact(name: "", role: "", phone: "")] : project.keyContacts
+        masterDocument.mapImageData = project.mapImageData
+
+        if !project.referenceCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ramsDocument.referenceCode = project.referenceCode
+        }
+
+        if let linkedClientID = project.clientID {
+            masterDocument.clientID = linkedClientID
+            if let client = libraryViewModel.library.clients.first(where: { $0.id == linkedClientID }) {
+                masterDocument.clientName = client.name
+            }
+        }
+    }
+
+    @discardableResult
+    func createClient(
+        name: String,
+        contactName: String,
+        contactEmail: String,
+        contactPhone: String
+    ) -> Bool {
+        errorMessage = nil
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            errorMessage = "Client name is required."
+            return false
+        }
+
+        let now = Date()
+        if let existing = libraryViewModel.library.clients.first(where: {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                .localizedCaseInsensitiveCompare(cleanName) == .orderedSame
+        }) {
+            let updated = ClientRecord(
+                id: existing.id,
+                name: cleanName,
+                contactName: contactName.trimmingCharacters(in: .whitespacesAndNewlines),
+                contactEmail: contactEmail.trimmingCharacters(in: .whitespacesAndNewlines),
+                contactPhone: contactPhone.trimmingCharacters(in: .whitespacesAndNewlines),
+                createdAt: existing.createdAt,
+                updatedAt: now
+            )
+            libraryViewModel.saveClient(updated)
+            selectClient(id: updated.id)
+            statusMessage = "Client updated and selected."
+            return true
+        }
+
+        let newClient = ClientRecord(
+            name: cleanName,
+            contactName: contactName.trimmingCharacters(in: .whitespacesAndNewlines),
+            contactEmail: contactEmail.trimmingCharacters(in: .whitespacesAndNewlines),
+            contactPhone: contactPhone.trimmingCharacters(in: .whitespacesAndNewlines),
+            createdAt: now,
+            updatedAt: now
+        )
+        libraryViewModel.saveClient(newClient)
+        selectClient(id: newClient.id)
+        statusMessage = "Client saved and selected."
+        return true
+    }
+
+    @discardableResult
+    func createProject(
+        projectID: UUID? = nil,
+        projectCreatedAt: Date? = nil,
+        name: String,
+        siteAddress: String,
+        principalContractor: String,
+        referenceCode: String,
+        emergencyContactName: String,
+        emergencyContactPhone: String,
+        nearestHospitalName: String,
+        nearestHospitalAddress: String,
+        hospitalDirections: String,
+        keyContacts: [KeyContact],
+        mapImageData: Data?,
+        clientID: UUID?
+    ) -> Bool {
+        errorMessage = nil
+        guard let clientID else {
+            errorMessage = "Select a client before creating a project."
+            return false
+        }
+
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else {
+            errorMessage = "Project name is required."
+            return false
+        }
+
+        let now = Date()
+        let newProject = ProjectRecord(
+            id: projectID ?? UUID(),
+            clientID: clientID,
+            name: cleanName,
+            siteAddress: siteAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+            principalContractor: principalContractor.trimmingCharacters(in: .whitespacesAndNewlines),
+            referenceCode: referenceCode.trimmingCharacters(in: .whitespacesAndNewlines),
+            emergencyContactName: emergencyContactName.trimmingCharacters(in: .whitespacesAndNewlines),
+            emergencyContactPhone: emergencyContactPhone.trimmingCharacters(in: .whitespacesAndNewlines),
+            nearestHospitalName: nearestHospitalName.trimmingCharacters(in: .whitespacesAndNewlines),
+            nearestHospitalAddress: nearestHospitalAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+            hospitalDirections: hospitalDirections.trimmingCharacters(in: .whitespacesAndNewlines),
+            keyContacts: normalizedKeyContacts(keyContacts),
+            mapImageData: mapImageData,
+            createdAt: projectCreatedAt ?? now,
+            updatedAt: now
+        )
+        libraryViewModel.saveProject(newProject)
+        selectProject(id: newProject.id)
+        statusMessage = projectID == nil ? "Project saved and selected." : "Project updated."
+        return true
     }
 
     func saveToLibraries() {
@@ -293,14 +549,33 @@ final class WizardViewModel: ObservableObject {
     private func validateCurrentStep() -> Bool {
         switch currentStep {
         case .masterDocument:
+            guard masterDocument.clientID != nil else {
+                errorMessage = "Select or create a client first."
+                return false
+            }
+            guard masterDocument.projectID != nil else {
+                errorMessage = "Select or create a project first."
+                return false
+            }
             let required = [
                 masterDocument.projectName,
                 masterDocument.siteAddress,
+                masterDocument.emergencyContactName,
+                masterDocument.emergencyContactPhone,
                 masterDocument.nearestHospitalName,
+                masterDocument.nearestHospitalAddress,
                 masterDocument.hospitalDirections
             ]
             if required.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-                errorMessage = "Complete project, site, and hospital details before continuing."
+                errorMessage = "Complete all project, emergency, and hospital fields before continuing."
+                return false
+            }
+            if masterDocument.mapImageData == nil {
+                errorMessage = "Add a project map image before continuing."
+                return false
+            }
+            if normalizedKeyContacts(masterDocument.keyContacts).isEmpty {
+                errorMessage = "Add at least one key contact before continuing."
                 return false
             }
         case .ramsDocument:
@@ -349,5 +624,39 @@ final class WizardViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmm"
         return "RAMS-\(formatter.string(from: Date()))"
+    }
+
+    private func ensureProjectContextForWizard() {
+        guard let projectID = masterDocument.projectID else { return }
+        let now = Date()
+        guard let existingProject = libraryViewModel.library.projects.first(where: { $0.id == projectID }) else { return }
+
+        let project = ProjectRecord(
+            id: existingProject.id,
+            clientID: masterDocument.clientID,
+            name: masterDocument.projectName.trimmingCharacters(in: .whitespacesAndNewlines),
+            siteAddress: masterDocument.siteAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+            principalContractor: masterDocument.principalContractor.trimmingCharacters(in: .whitespacesAndNewlines),
+            referenceCode: ramsDocument.referenceCode.trimmingCharacters(in: .whitespacesAndNewlines),
+            emergencyContactName: masterDocument.emergencyContactName.trimmingCharacters(in: .whitespacesAndNewlines),
+            emergencyContactPhone: masterDocument.emergencyContactPhone.trimmingCharacters(in: .whitespacesAndNewlines),
+            nearestHospitalName: masterDocument.nearestHospitalName.trimmingCharacters(in: .whitespacesAndNewlines),
+            nearestHospitalAddress: masterDocument.nearestHospitalAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+            hospitalDirections: masterDocument.hospitalDirections.trimmingCharacters(in: .whitespacesAndNewlines),
+            keyContacts: normalizedKeyContacts(masterDocument.keyContacts),
+            mapImageData: masterDocument.mapImageData,
+            createdAt: existingProject.createdAt,
+            updatedAt: now
+        )
+
+        libraryViewModel.saveProject(project)
+        masterDocument.projectID = project.id
+    }
+
+    private func normalizedKeyContacts(_ contacts: [KeyContact]) -> [KeyContact] {
+        contacts.filter { contact in
+            !contact.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                !contact.phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 }

@@ -4,6 +4,7 @@ struct WizardFlowView: View {
     @ObservedObject var viewModel: WizardViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @State private var showingHazardPicker = false
+    let currentUserDisplayName: String
 
     var body: some View {
         NavigationStack {
@@ -60,7 +61,8 @@ struct WizardFlowView: View {
                     case .ramsDocument:
                         RamsDocumentStepView(
                             viewModel: viewModel,
-                            showHazardPicker: $showingHazardPicker
+                            showHazardPicker: $showingHazardPicker,
+                            currentUserDisplayName: currentUserDisplayName
                         )
                     case .liftPlan:
                         LiftPlanStepView(viewModel: viewModel)
@@ -123,8 +125,8 @@ struct WizardFlowView: View {
             .sheet(isPresented: $showingHazardPicker) {
                 HazardLibraryPickerSheet(
                     templates: libraryViewModel.library.hazards,
-                    onSelect: { template in
-                        viewModel.addRisk(from: template)
+                    onAddSelected: { templates in
+                        viewModel.addRisks(from: templates)
                         showingHazardPicker = false
                     }
                 )
@@ -135,57 +137,225 @@ struct WizardFlowView: View {
 
 private struct MasterDocumentStepView: View {
     @ObservedObject var viewModel: WizardViewModel
+    @State private var showingAddClientSheet = false
+    @State private var projectEditorContext: ProjectEditorContext?
 
     var body: some View {
         Form {
-            Section("Project info") {
-                TextField("Project name", text: $viewModel.masterDocument.projectName)
-                TextField("Site address", text: $viewModel.masterDocument.siteAddress, axis: .vertical)
-                    .lineLimit(2...4)
-                TextField("Client", text: $viewModel.masterDocument.clientName)
-                TextField("Principal contractor", text: $viewModel.masterDocument.principalContractor)
-            }
-
-            Section("Emergency details") {
-                TextField("Emergency contact name", text: $viewModel.masterDocument.emergencyContactName)
-                TextField("Emergency contact phone", text: $viewModel.masterDocument.emergencyContactPhone)
-                TextField("Nearest hospital", text: $viewModel.masterDocument.nearestHospitalName)
-                TextField("Hospital address", text: $viewModel.masterDocument.nearestHospitalAddress, axis: .vertical)
-                    .lineLimit(2...4)
-                TextField("Directions to hospital", text: $viewModel.masterDocument.hospitalDirections, axis: .vertical)
-                    .lineLimit(3...6)
-            }
-
-            Section("Key contacts") {
-                ForEach($viewModel.masterDocument.keyContacts) { $contact in
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("Name", text: $contact.name)
-                        TextField("Role", text: $contact.role)
-                        TextField("Phone", text: $contact.phone)
-                    }
-                    .padding(.vertical, 4)
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Set up project context first")
+                        .font(.headline)
+                    Text("Start by selecting or creating a client, then create/select a project with emergency contacts, hospital details, key contacts, and map.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-                .onDelete { offsets in
-                    viewModel.masterDocument.keyContacts.remove(atOffsets: offsets)
+                .padding(.vertical, 4)
+            }
+
+            Section("1. Client") {
+                Picker(
+                    "Selected client",
+                    selection: Binding(
+                        get: { viewModel.masterDocument.clientID },
+                        set: { viewModel.selectClient(id: $0) }
+                    )
+                ) {
+                    Text("Select client").tag(nil as UUID?)
+                    ForEach(viewModel.availableClients) { client in
+                        Text(client.name).tag(client.id as UUID?)
+                    }
                 }
 
                 Button {
-                    viewModel.masterDocument.keyContacts.append(KeyContact())
+                    showingAddClientSheet = true
                 } label: {
-                    Label("Add contact", systemImage: "plus.circle")
+                    Label("Create client", systemImage: "plus.circle")
+                }
+
+                if let selectedClient = viewModel.selectedClient {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(selectedClient.name)
+                            .font(.subheadline.weight(.semibold))
+                        let contactSummary = [
+                            selectedClient.contactName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : selectedClient.contactName,
+                            selectedClient.contactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : selectedClient.contactPhone
+                        ]
+                            .compactMap { $0 }
+                            .joined(separator: " • ")
+                        if !contactSummary.isEmpty {
+                            Text(contactSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
                 }
             }
 
-            Section("Map") {
-                MapImagePickerView(imageData: $viewModel.masterDocument.mapImageData)
+            Section("2. Project") {
+                if viewModel.selectedClient == nil {
+                    Label("Select a client first to unlock projects.", systemImage: "arrow.up")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Picker(
+                        "Selected project",
+                        selection: Binding(
+                            get: { viewModel.masterDocument.projectID },
+                            set: { viewModel.selectProject(id: $0) }
+                        )
+                    ) {
+                        Text("Select project").tag(nil as UUID?)
+                        ForEach(viewModel.availableProjectsForSelectedClient) { project in
+                            Text(project.name).tag(project.id as UUID?)
+                        }
+                    }
+
+                    HStack {
+                        Button {
+                            guard let client = viewModel.selectedClient else { return }
+                            projectEditorContext = ProjectEditorContext(
+                                client: client,
+                                existing: nil,
+                                draft: viewModel.masterDocument
+                            )
+                        } label: {
+                            Label("Create project", systemImage: "plus.circle")
+                        }
+
+                        Spacer()
+
+                        Button {
+                            guard let client = viewModel.selectedClient,
+                                  let project = viewModel.selectedProject else { return }
+                            projectEditorContext = ProjectEditorContext(
+                                client: client,
+                                existing: project,
+                                draft: viewModel.masterDocument
+                            )
+                        } label: {
+                            Label("Edit project", systemImage: "pencil")
+                        }
+                        .disabled(viewModel.selectedProject == nil)
+                    }
+
+                    if let selectedProject = viewModel.selectedProject {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(selectedProject.name)
+                                .font(.subheadline.weight(.semibold))
+                            Text(selectedProject.siteAddress.ifEmpty("No site address"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if !selectedProject.referenceCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text("Reference: \(selectedProject.referenceCode)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+
+            Section("Project readiness") {
+                readinessRow(
+                    "Emergency contact",
+                    isComplete: !viewModel.masterDocument.emergencyContactName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                        !viewModel.masterDocument.emergencyContactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+                readinessRow(
+                    "Nearest hospital",
+                    isComplete: !viewModel.masterDocument.nearestHospitalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                        !viewModel.masterDocument.nearestHospitalAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                        !viewModel.masterDocument.hospitalDirections.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+                readinessRow(
+                    "Key contacts",
+                    isComplete: viewModel.masterDocument.keyContacts.contains(where: {
+                        !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                            !$0.phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    })
+                )
+                readinessRow(
+                    "Map image",
+                    isComplete: viewModel.masterDocument.mapImageData != nil
+                )
+            }
+        }
+        .sheet(isPresented: $showingAddClientSheet) {
+            ClientEditorSheet { name, contactName, contactEmail, contactPhone in
+                viewModel.createClient(
+                    name: name,
+                    contactName: contactName,
+                    contactEmail: contactEmail,
+                    contactPhone: contactPhone
+                )
+            }
+        }
+        .sheet(item: $projectEditorContext) { context in
+            ProjectEditorSheet(
+                client: context.client,
+                existing: context.existing,
+                draft: context.draft
+            ) {
+                name,
+                siteAddress,
+                principalContractor,
+                referenceCode,
+                emergencyContactName,
+                emergencyContactPhone,
+                nearestHospitalName,
+                nearestHospitalAddress,
+                hospitalDirections,
+                keyContacts,
+                mapImageData in
+                viewModel.createProject(
+                    projectID: context.existing?.id,
+                    projectCreatedAt: context.existing?.createdAt,
+                    name: name,
+                    siteAddress: siteAddress,
+                    principalContractor: principalContractor,
+                    referenceCode: referenceCode,
+                    emergencyContactName: emergencyContactName,
+                    emergencyContactPhone: emergencyContactPhone,
+                    nearestHospitalName: nearestHospitalName,
+                    nearestHospitalAddress: nearestHospitalAddress,
+                    hospitalDirections: hospitalDirections,
+                    keyContacts: keyContacts,
+                    mapImageData: mapImageData,
+                    clientID: context.client.id
+                )
             }
         }
     }
+
+    @ViewBuilder
+    private func readinessRow(_ title: String, isComplete: Bool) -> some View {
+        HStack {
+            Image(systemName: isComplete ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundStyle(isComplete ? Color.green : Color.orange)
+            Text(title)
+                .font(.subheadline)
+            Spacer()
+            Text(isComplete ? "Ready" : "Missing")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isComplete ? Color.green : Color.orange)
+        }
+    }
+}
+
+private struct ProjectEditorContext: Identifiable {
+    let id = UUID()
+    let client: ClientRecord
+    let existing: ProjectRecord?
+    let draft: MasterDocument
 }
 
 private struct RamsDocumentStepView: View {
     @ObservedObject var viewModel: WizardViewModel
     @Binding var showHazardPicker: Bool
+    let currentUserDisplayName: String
 
     var body: some View {
         Form {
@@ -194,6 +364,12 @@ private struct RamsDocumentStepView: View {
                 TextField("Reference code", text: $viewModel.ramsDocument.referenceCode)
                 TextField("Prepared by", text: $viewModel.ramsDocument.preparedBy)
                 TextField("Approved by", text: $viewModel.ramsDocument.approvedBy)
+                Button {
+                    viewModel.quickAddApprovedByForSamePerson(loggedInUserName: currentUserDisplayName)
+                } label: {
+                    Label("Same as prepared / logged-in user", systemImage: "person.badge.plus")
+                }
+                .buttonStyle(.bordered)
                 TextField("Scope of works", text: $viewModel.ramsDocument.scopeOfWorks, axis: .vertical)
                     .lineLimit(3...6)
 
@@ -349,6 +525,9 @@ private struct RamsDocumentStepView: View {
                 TextField("Fire assembly point", text: $viewModel.ramsDocument.emergencyAssemblyPoint)
                 TextField("Emergency contact", text: $viewModel.ramsDocument.emergencyContact)
             }
+        }
+        .onAppear {
+            viewModel.populatePreparedByIfNeeded(with: currentUserDisplayName)
         }
     }
 }
@@ -545,35 +724,271 @@ private struct ReviewExportStepView: View {
 private struct HazardLibraryPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     let templates: [HazardTemplate]
-    let onSelect: (HazardTemplate) -> Void
+    let onAddSelected: ([HazardTemplate]) -> Void
+    @State private var selectedTemplateIDs: Set<UUID> = []
 
     var body: some View {
         NavigationStack {
             List(templates) { template in
                 Button {
-                    onSelect(template)
-                    dismiss()
+                    toggleSelection(for: template.id)
                 } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(template.title)
-                            .font(.headline)
-                        Text(template.category)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text(template.riskToDefault)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(template.title)
+                                .font(.headline)
+                            Text(template.category)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text(template.riskToDefault)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: selectedTemplateIDs.contains(template.id) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selectedTemplateIDs.contains(template.id) ? Color.proTeal : .secondary)
                     }
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
             }
             .navigationTitle("Hazard Library")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(addButtonTitle) {
+                        let selectedTemplates = templates.filter { selectedTemplateIDs.contains($0.id) }
+                        onAddSelected(selectedTemplates)
+                        dismiss()
+                    }
+                    .disabled(selectedTemplateIDs.isEmpty)
+                }
             }
         }
+    }
+
+    private var addButtonTitle: String {
+        selectedTemplateIDs.count == 1 ? "Add 1" : "Add \(selectedTemplateIDs.count)"
+    }
+
+    private func toggleSelection(for id: UUID) {
+        if selectedTemplateIDs.contains(id) {
+            selectedTemplateIDs.remove(id)
+        } else {
+            selectedTemplateIDs.insert(id)
+        }
+    }
+}
+
+private struct ClientEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var contactName = ""
+    @State private var contactEmail = ""
+    @State private var contactPhone = ""
+
+    let onSave: (_ name: String, _ contactName: String, _ contactEmail: String, _ contactPhone: String) -> Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Client details") {
+                    TextField("Client name", text: $name)
+                    TextField("Contact name", text: $contactName)
+                    TextField("Contact email", text: $contactEmail)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+                        .autocorrectionDisabled()
+                    TextField("Contact phone", text: $contactPhone)
+                        .keyboardType(.phonePad)
+                }
+            }
+            .navigationTitle("New Client")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if onSave(name, contactName, contactEmail, contactPhone) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct ProjectEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var siteAddress = ""
+    @State private var principalContractor = ""
+    @State private var referenceCode = ""
+    @State private var emergencyContactName = ""
+    @State private var emergencyContactPhone = ""
+    @State private var nearestHospitalName = ""
+    @State private var nearestHospitalAddress = ""
+    @State private var hospitalDirections = ""
+    @State private var keyContacts: [KeyContact] = [KeyContact()]
+    @State private var mapImageData: Data?
+
+    let client: ClientRecord
+    let existing: ProjectRecord?
+    let onSave: (
+        _ name: String,
+        _ siteAddress: String,
+        _ principalContractor: String,
+        _ referenceCode: String,
+        _ emergencyContactName: String,
+        _ emergencyContactPhone: String,
+        _ nearestHospitalName: String,
+        _ nearestHospitalAddress: String,
+        _ hospitalDirections: String,
+        _ keyContacts: [KeyContact],
+        _ mapImageData: Data?
+    ) -> Bool
+
+    init(
+        client: ClientRecord,
+        existing: ProjectRecord?,
+        draft: MasterDocument,
+        onSave: @escaping (
+            _ name: String,
+            _ siteAddress: String,
+            _ principalContractor: String,
+            _ referenceCode: String,
+            _ emergencyContactName: String,
+            _ emergencyContactPhone: String,
+            _ nearestHospitalName: String,
+            _ nearestHospitalAddress: String,
+            _ hospitalDirections: String,
+            _ keyContacts: [KeyContact],
+            _ mapImageData: Data?
+        ) -> Bool
+    ) {
+        self.client = client
+        self.existing = existing
+        self.onSave = onSave
+        _name = State(initialValue: existing?.name ?? draft.projectName)
+        _siteAddress = State(initialValue: existing?.siteAddress ?? draft.siteAddress)
+        _principalContractor = State(initialValue: existing?.principalContractor ?? draft.principalContractor)
+        _referenceCode = State(initialValue: existing?.referenceCode ?? "")
+        _emergencyContactName = State(initialValue: existing?.emergencyContactName ?? draft.emergencyContactName)
+        _emergencyContactPhone = State(initialValue: existing?.emergencyContactPhone ?? draft.emergencyContactPhone)
+        _nearestHospitalName = State(initialValue: existing?.nearestHospitalName ?? draft.nearestHospitalName)
+        _nearestHospitalAddress = State(initialValue: existing?.nearestHospitalAddress ?? draft.nearestHospitalAddress)
+        _hospitalDirections = State(initialValue: existing?.hospitalDirections ?? draft.hospitalDirections)
+        let existingContacts = existing?.keyContacts ?? draft.keyContacts
+        _keyContacts = State(initialValue: existingContacts.isEmpty ? [KeyContact()] : existingContacts)
+        _mapImageData = State(initialValue: existing?.mapImageData ?? draft.mapImageData)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Client") {
+                    Text(client.name)
+                        .font(.subheadline.weight(.semibold))
+                }
+
+                Section("Project details") {
+                    TextField("Project name", text: $name)
+                    TextField("Site address", text: $siteAddress, axis: .vertical)
+                        .lineLimit(2...4)
+                    TextField("Principal contractor", text: $principalContractor)
+                    TextField("Reference code", text: $referenceCode)
+                }
+
+                Section("Emergency and hospital") {
+                    TextField("Emergency contact name", text: $emergencyContactName)
+                    TextField("Emergency contact phone", text: $emergencyContactPhone)
+                        .keyboardType(.phonePad)
+                    TextField("Nearest hospital", text: $nearestHospitalName)
+                    TextField("Hospital address", text: $nearestHospitalAddress, axis: .vertical)
+                        .lineLimit(2...4)
+                    TextField("Directions to hospital", text: $hospitalDirections, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+
+                Section("Key contacts") {
+                    ForEach($keyContacts) { $contact in
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Name", text: $contact.name)
+                            TextField("Role", text: $contact.role)
+                            TextField("Phone", text: $contact.phone)
+                                .keyboardType(.phonePad)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onDelete { offsets in
+                        keyContacts.remove(atOffsets: offsets)
+                        if keyContacts.isEmpty {
+                            keyContacts = [KeyContact()]
+                        }
+                    }
+
+                    Button {
+                        keyContacts.append(KeyContact())
+                    } label: {
+                        Label("Add contact", systemImage: "plus.circle")
+                    }
+                }
+
+                Section("Map") {
+                    MapImagePickerView(imageData: $mapImageData)
+                }
+            }
+            .navigationTitle(existing == nil ? "New Project" : "Edit Project")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        if onSave(
+                            name,
+                            siteAddress,
+                            principalContractor,
+                            referenceCode,
+                            emergencyContactName,
+                            emergencyContactPhone,
+                            nearestHospitalName,
+                            nearestHospitalAddress,
+                            hospitalDirections,
+                            keyContacts,
+                            mapImageData
+                        ) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(!canSave)
+                }
+            }
+        }
+    }
+
+    private var hasAtLeastOneContact: Bool {
+        keyContacts.contains { contact in
+            !contact.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                !contact.phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !siteAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !emergencyContactName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !emergencyContactPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !nearestHospitalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !nearestHospitalAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !hospitalDirections.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            hasAtLeastOneContact &&
+            mapImageData != nil
     }
 }
 

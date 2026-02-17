@@ -179,8 +179,146 @@ struct KeyContact: Identifiable, Codable, Hashable {
     }
 }
 
+struct ClientRecord: Identifiable, Codable, Hashable {
+    var id: UUID
+    var name: String
+    var contactName: String
+    var contactEmail: String
+    var contactPhone: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        contactName: String = "",
+        contactEmail: String = "",
+        contactPhone: String = "",
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.name = name
+        self.contactName = contactName
+        self.contactEmail = contactEmail
+        self.contactPhone = contactPhone
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+struct ProjectRecord: Identifiable, Codable, Hashable {
+    var id: UUID
+    var clientID: UUID?
+    var name: String
+    var siteAddress: String
+    var principalContractor: String
+    var referenceCode: String
+    var emergencyContactName: String
+    var emergencyContactPhone: String
+    var nearestHospitalName: String
+    var nearestHospitalAddress: String
+    var hospitalDirections: String
+    var keyContacts: [KeyContact]
+    var mapImageData: Data?
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        clientID: UUID? = nil,
+        name: String,
+        siteAddress: String = "",
+        principalContractor: String = "",
+        referenceCode: String = "",
+        emergencyContactName: String = "",
+        emergencyContactPhone: String = "",
+        nearestHospitalName: String = "",
+        nearestHospitalAddress: String = "",
+        hospitalDirections: String = "",
+        keyContacts: [KeyContact] = [],
+        mapImageData: Data? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.clientID = clientID
+        self.name = name
+        self.siteAddress = siteAddress
+        self.principalContractor = principalContractor
+        self.referenceCode = referenceCode
+        self.emergencyContactName = emergencyContactName
+        self.emergencyContactPhone = emergencyContactPhone
+        self.nearestHospitalName = nearestHospitalName
+        self.nearestHospitalAddress = nearestHospitalAddress
+        self.hospitalDirections = hospitalDirections
+        self.keyContacts = keyContacts
+        self.mapImageData = mapImageData
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case clientID
+        case name
+        case siteAddress
+        case principalContractor
+        case referenceCode
+        case emergencyContactName
+        case emergencyContactPhone
+        case nearestHospitalName
+        case nearestHospitalAddress
+        case hospitalDirections
+        case keyContacts
+        case mapImageData
+        case createdAt
+        case updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        clientID = try container.decodeIfPresent(UUID.self, forKey: .clientID)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        siteAddress = try container.decodeIfPresent(String.self, forKey: .siteAddress) ?? ""
+        principalContractor = try container.decodeIfPresent(String.self, forKey: .principalContractor) ?? ""
+        referenceCode = try container.decodeIfPresent(String.self, forKey: .referenceCode) ?? ""
+        emergencyContactName = try container.decodeIfPresent(String.self, forKey: .emergencyContactName) ?? ""
+        emergencyContactPhone = try container.decodeIfPresent(String.self, forKey: .emergencyContactPhone) ?? ""
+        nearestHospitalName = try container.decodeIfPresent(String.self, forKey: .nearestHospitalName) ?? ""
+        nearestHospitalAddress = try container.decodeIfPresent(String.self, forKey: .nearestHospitalAddress) ?? ""
+        hospitalDirections = try container.decodeIfPresent(String.self, forKey: .hospitalDirections) ?? ""
+        keyContacts = try container.decodeIfPresent([KeyContact].self, forKey: .keyContacts) ?? []
+        mapImageData = try container.decodeIfPresent(Data.self, forKey: .mapImageData)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(clientID, forKey: .clientID)
+        try container.encode(name, forKey: .name)
+        try container.encode(siteAddress, forKey: .siteAddress)
+        try container.encode(principalContractor, forKey: .principalContractor)
+        try container.encode(referenceCode, forKey: .referenceCode)
+        try container.encode(emergencyContactName, forKey: .emergencyContactName)
+        try container.encode(emergencyContactPhone, forKey: .emergencyContactPhone)
+        try container.encode(nearestHospitalName, forKey: .nearestHospitalName)
+        try container.encode(nearestHospitalAddress, forKey: .nearestHospitalAddress)
+        try container.encode(hospitalDirections, forKey: .hospitalDirections)
+        try container.encode(keyContacts, forKey: .keyContacts)
+        try container.encode(mapImageData, forKey: .mapImageData)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+    }
+}
+
 struct MasterDocument: Identifiable, Codable, Hashable {
     var id: UUID
+    var projectID: UUID?
+    var clientID: UUID?
     var projectName: String
     var siteAddress: String
     var clientName: String
@@ -198,6 +336,8 @@ struct MasterDocument: Identifiable, Codable, Hashable {
     static func draft() -> MasterDocument {
         MasterDocument(
             id: UUID(),
+            projectID: nil,
+            clientID: nil,
             projectName: "",
             siteAddress: "",
             clientName: "",
@@ -439,6 +579,53 @@ struct LibraryBundle: Codable, Hashable {
     var masterDocuments: [MasterDocument]
     var ramsDocuments: [RamsDocument]
     var liftPlans: [LiftPlan]
+    var clients: [ClientRecord]
+    var projects: [ProjectRecord]
+
+    init(
+        hazards: [HazardTemplate],
+        masterDocuments: [MasterDocument],
+        ramsDocuments: [RamsDocument],
+        liftPlans: [LiftPlan],
+        clients: [ClientRecord] = [],
+        projects: [ProjectRecord] = []
+    ) {
+        self.hazards = hazards
+        self.masterDocuments = masterDocuments
+        self.ramsDocuments = ramsDocuments
+        self.liftPlans = liftPlans
+        self.clients = clients
+        self.projects = projects
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case hazards
+        case masterDocuments
+        case ramsDocuments
+        case liftPlans
+        case clients
+        case projects
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        hazards = try container.decodeIfPresent([HazardTemplate].self, forKey: .hazards) ?? []
+        masterDocuments = try container.decodeIfPresent([MasterDocument].self, forKey: .masterDocuments) ?? []
+        ramsDocuments = try container.decodeIfPresent([RamsDocument].self, forKey: .ramsDocuments) ?? []
+        liftPlans = try container.decodeIfPresent([LiftPlan].self, forKey: .liftPlans) ?? []
+        clients = try container.decodeIfPresent([ClientRecord].self, forKey: .clients) ?? []
+        projects = try container.decodeIfPresent([ProjectRecord].self, forKey: .projects) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(hazards, forKey: .hazards)
+        try container.encode(masterDocuments, forKey: .masterDocuments)
+        try container.encode(ramsDocuments, forKey: .ramsDocuments)
+        try container.encode(liftPlans, forKey: .liftPlans)
+        try container.encode(clients, forKey: .clients)
+        try container.encode(projects, forKey: .projects)
+    }
 
     static var seeded: LibraryBundle {
         LibraryBundle(
@@ -521,7 +708,9 @@ struct LibraryBundle: Codable, Hashable {
             ],
             masterDocuments: [],
             ramsDocuments: [],
-            liftPlans: []
+            liftPlans: [],
+            clients: [],
+            projects: []
         )
     }
 }

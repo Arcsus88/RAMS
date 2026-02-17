@@ -383,48 +383,344 @@ private struct CautionStripe: View {
     }
 }
 
-private enum DashboardTab: Hashable {
-    case home
-    case wizard
-    case libraries
-    case account
+private struct UserHomeView: View {
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
+    @EnvironmentObject private var libraryViewModel: LibraryViewModel
+
+    private struct ActivityItem: Identifiable {
+        let id = UUID()
+        let title: String
+        let subtitle: String
+        let timestamp: Date
+        let icon: String
+        let tint: Color
+    }
+    
+    private struct MetricTile: View {
+        let title: String
+        let value: String
+        let icon: String
+        let tint: Color
+        
+        var body: some View {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(tint.opacity(0.16))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: icon)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(tint)
+                }
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(value)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(Color.proSlate900)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.proSlate100, lineWidth: 1)
+            )
+        }
+    }
+    
+    private struct TabGuideItem: Identifiable {
+        let id = UUID()
+        let tab: String
+        let detail: String
+        let icon: String
+        let tint: Color
+    }
+    
+    private var greetingName: String {
+        let displayName = (sessionViewModel.currentUser?.displayName ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !displayName.isEmpty, displayName.count > 1 {
+            return displayName
+        }
+        
+        let emailPrefix = (sessionViewModel.currentUser?.email ?? "")
+            .split(separator: "@")
+            .first
+            .map(String.init)?
+            .replacingOccurrences(of: ".", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        return emailPrefix.isEmpty ? "Safety Team" : emailPrefix.capitalized
+    }
+    
+    private var greetingPrefix: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<12:
+            return "Good morning"
+        case 12..<18:
+            return "Good afternoon"
+        default:
+            return "Good evening"
+        }
+    }
+    
+    private var tabGuideItems: [TabGuideItem] {
+        [
+            TabGuideItem(tab: "Wizard", detail: "Create and export RAMS packs", icon: "wand.and.stars", tint: .proYellow),
+            TabGuideItem(tab: "Libraries", detail: "Reuse hazards and prior docs", icon: "books.vertical", tint: .proTeal),
+            TabGuideItem(tab: "Account", detail: "Review profile and session", icon: "person.circle", tint: .orange)
+        ]
+    }
+
+    private var totalSavedDocuments: Int {
+        libraryViewModel.library.masterDocuments.count +
+            libraryViewModel.library.ramsDocuments.count +
+            libraryViewModel.library.liftPlans.count
+    }
+
+    private var liftPlanIconName: String {
+        "helmet"
+    }
+
+    private var highRiskCount: Int {
+        libraryViewModel.library.ramsDocuments
+            .filter { $0.overallRiskReview == .high || $0.overallRiskReview == .veryHigh }
+            .count
+    }
+
+    private var recentActivity: [ActivityItem] {
+        let master = libraryViewModel.library.masterDocuments.map {
+            ActivityItem(
+                title: $0.projectName.ifEmpty("Untitled project"),
+                subtitle: "Master document",
+                timestamp: $0.updatedAt,
+                icon: "doc.text.fill",
+                tint: .proTeal
+            )
+        }
+
+        let rams = libraryViewModel.library.ramsDocuments.map {
+            ActivityItem(
+                title: $0.title.ifEmpty("Untitled RAMS"),
+                subtitle: "RAMS (\($0.riskAssessments.count) hazards)",
+                timestamp: $0.updatedAt,
+                icon: "exclamationmark.shield.fill",
+                tint: .proYellow
+            )
+        }
+
+        let liftPlans = libraryViewModel.library.liftPlans.map {
+            ActivityItem(
+                title: $0.title.ifEmpty("Untitled lift plan"),
+                subtitle: "Lift plan (\($0.category.rawValue))",
+                timestamp: $0.updatedAt,
+                icon: liftPlanIconName,
+                tint: .orange
+            )
+        }
+
+        return (master + rams + liftPlans)
+            .sorted { $0.timestamp > $1.timestamp }
+            .prefix(6)
+            .map { $0 }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Operations Dashboard")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.74))
+                        
+                        Text("\(greetingPrefix), \(greetingName)")
+                            .font(.title2.weight(.heavy))
+                            .foregroundStyle(.white)
+                        
+                        Text("Use the bottom tabs to move between creation, libraries, and account management.")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.84))
+                        
+                        if let latest = recentActivity.first {
+                            HStack(spacing: 6) {
+                                Image(systemName: "clock.badge.checkmark")
+                                Text("Last update: \(DateFormatter.shortDateTime.string(from: latest.timestamp))")
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.76))
+                            .padding(.top, 2)
+                        }
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.proSlate900, Color.proSlate800],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.proYellow.opacity(0.28), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.16), radius: 18, y: 9)
+
+                    HStack(spacing: 10) {
+                        MetricTile(
+                            title: "Saved Docs",
+                            value: "\(totalSavedDocuments)",
+                            icon: "folder.fill.badge.plus",
+                            tint: .proYellow
+                        )
+                        MetricTile(
+                            title: "High Risk RAMS",
+                            value: "\(highRiskCount)",
+                            icon: "exclamationmark.triangle.fill",
+                            tint: .orange
+                        )
+                    }
+                    
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        MetricTile(title: "Hazards", value: "\(libraryViewModel.library.hazards.count)", icon: "shield.lefthalf.filled", tint: .proTeal)
+                        MetricTile(title: "Master Docs", value: "\(libraryViewModel.library.masterDocuments.count)", icon: "doc.on.doc.fill", tint: .proYellow)
+                        MetricTile(title: "RAMS Docs", value: "\(libraryViewModel.library.ramsDocuments.count)", icon: "doc.text.magnifyingglass", tint: .orange)
+                        MetricTile(title: "Lift Plans", value: "\(libraryViewModel.library.liftPlans.count)", icon: liftPlanIconName, tint: .orange)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Recent activity")
+                            .font(.headline.weight(.semibold))
+
+                        if recentActivity.isEmpty {
+                            Text("No saved documents yet. Start from the Wizard tab to create your first RAMS pack.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 4)
+                        } else {
+                            ForEach(recentActivity) { item in
+                                HStack(alignment: .top, spacing: 10) {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                            .fill(item.tint.opacity(0.16))
+                                            .frame(width: 30, height: 30)
+                                        Image(systemName: item.icon)
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(item.tint)
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .lineLimit(1)
+                                        Text(item.subtitle)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Text(DateFormatter.shortDateTime.string(from: item.timestamp))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.vertical, 3)
+                            }
+                        }
+                    }
+                    .proCard()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Tab guide")
+                            .font(.headline.weight(.semibold))
+                        
+                        ForEach(tabGuideItems) { item in
+                            HStack(spacing: 10) {
+                                ZStack {
+                                    Circle()
+                                        .fill(item.tint.opacity(0.16))
+                                        .frame(width: 30, height: 30)
+                                    Image(systemName: item.icon)
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(item.tint)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(item.tab)
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(item.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                    .proCard()
+
+                    if let errorMessage = libraryViewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color.red.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.red.opacity(0.18), lineWidth: 1)
+                            )
+                    }
+                }
+                .padding()
+            }
+            .background(
+                LinearGradient(
+                    colors: [Color.proSlate050, Color.white],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .navigationTitle("Home")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
 }
 
 struct DashboardView: View {
     @EnvironmentObject private var sessionViewModel: SessionViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
-    @State private var selectedTab: DashboardTab = .home
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            UserHomeView(
-                onOpenWizard: { selectedTab = .wizard },
-                onOpenLibraries: { selectedTab = .libraries },
-                onOpenAccount: { selectedTab = .account }
-            )
-            .tabItem {
-                Label("Home", systemImage: "house.fill")
-            }
-            .tag(DashboardTab.home)
+        TabView {
+            UserHomeView()
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
 
             WizardHostView(libraryViewModel: libraryViewModel)
                 .tabItem {
                     Label("Wizard", systemImage: "wand.and.stars")
                 }
-                .tag(DashboardTab.wizard)
 
             LibrariesHomeView()
                 .environmentObject(libraryViewModel)
                 .tabItem {
                     Label("Libraries", systemImage: "books.vertical")
                 }
-                .tag(DashboardTab.libraries)
 
             accountView
                 .tabItem {
                     Label("Account", systemImage: "person.circle")
                 }
-                .tag(DashboardTab.account)
         }
         .tint(.proYellow)
         .task {
@@ -484,6 +780,7 @@ struct DashboardView: View {
 }
 
 private struct WizardHostView: View {
+    @EnvironmentObject private var sessionViewModel: SessionViewModel
     @ObservedObject var libraryViewModel: LibraryViewModel
     @StateObject private var wizardViewModel: WizardViewModel
 
@@ -495,6 +792,32 @@ private struct WizardHostView: View {
     }
 
     var body: some View {
-        WizardFlowView(viewModel: wizardViewModel)
+        WizardFlowView(
+            viewModel: wizardViewModel,
+            currentUserDisplayName: currentUserDisplayName
+        )
+    }
+
+    private var currentUserDisplayName: String {
+        let displayName = (sessionViewModel.currentUser?.displayName ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !displayName.isEmpty {
+            return displayName
+        }
+
+        let emailPrefix = (sessionViewModel.currentUser?.email ?? "")
+            .split(separator: "@")
+            .first
+            .map(String.init)?
+            .replacingOccurrences(of: ".", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return emailPrefix.capitalized
+    }
+}
+
+private extension String {
+    func ifEmpty(_ fallback: String) -> String {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : self
     }
 }
